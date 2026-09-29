@@ -36,6 +36,15 @@ def test_warden_ticket_escalates_without_tool_calls():
     assert result.outcome is Outcome.ESCALATED
     assert not result.tools_called
     assert result.escalation_brief
+
+
+def test_tool_failure_has_no_hallucinated_result():
+    def broken_tool(_student_id):
+        raise RuntimeError("synthetic tool unavailable")
+    result = CampusHelpdeskAgent(tool_overrides={"check_id_status": broken_tool}).run(Ticket("4", "STU001", "ID reset please"))
+    assert result.outcome is Outcome.ERROR
+    assert result.tool_results == []
+    assert "unavailable" in result.escalation_reason
     assert result.policy_rule == "warden_only"
 
 

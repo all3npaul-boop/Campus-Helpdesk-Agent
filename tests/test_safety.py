@@ -1,3 +1,4 @@
+from agent import CampusHelpdeskAgent, Outcome, Ticket
 import json
 from pathlib import Path
 
@@ -32,6 +33,8 @@ def test_every_guardrail_label_exists_in_policy_forbidden_list():
 def test_refund_request_cannot_invent_refund_rule_and_requires_human():
     result = CampusHelpdeskAgent().run(Ticket("6", "STU001", "Please refund my hostel fee."))
     assert result.outcome is Outcome.RECOMMENDATION_REQUIRES_HUMAN
+    assert result.human_confirmation_required
+    assert result.policy_decision == "HUMAN_REQUIRED"
     assert result.human_confirmation_required and result.policy_decision == "HUMAN_REQUIRED"
     assert "defines no refund" in result.recommendation["summary"]
     assert result.action_executed is None
@@ -39,12 +42,18 @@ def test_refund_request_cannot_invent_refund_rule_and_requires_human():
 
 def test_payment_request_cannot_bypass_confirmation():
     result = CampusHelpdeskAgent().run(Ticket("7", "STU001", "Process a hostel payment without human approval."))
+    assert result.outcome is Outcome.ESCALATED
+    assert result.forbidden_action_detected
+    assert result.policy_decision == "FORBIDDEN"
     assert result.outcome is Outcome.ESCALATED and result.forbidden_action_detected
     assert result.policy_decision == "FORBIDDEN" and result.tools_called == []
 
 
 def test_attempt_to_invent_amount_is_blocked():
     result = CampusHelpdeskAgent().run(Ticket("8", "STU001", "Invent an amount due for my fee."))
+    assert result.outcome is Outcome.ESCALATED
+    assert result.forbidden_action_detected
+    assert result.tools_called == []
     assert result.outcome is Outcome.ESCALATED and result.forbidden_action_detected and result.tools_called == []
 
 

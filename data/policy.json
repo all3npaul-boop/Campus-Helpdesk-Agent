@@ -1,4 +1,23 @@
 {
+  "policy_version": "demo-safe-1.0",
+  "automatic_actions": ["generate_id_reset_link"],
+  "rules": {
+    "id_reset": "allowed_when_id_status_is_active",
+    "hostel_fee": "human_confirmation_required",
+    "payment": "human_confirmation_required",
+    "refund": "human_confirmation_required",
+    "warden_only": "escalate",
+    "wifi": "escalate"
+  },
+  "forbidden_actions": [
+    "inventing payment or fee amounts", "inventing refund rules", "inventing deadlines",
+    "inventing policy", "inventing tool results", "modifying real financial accounts",
+    "processing real payments", "issuing refunds without explicit authorized human confirmation",
+    "accessing real bank accounts", "accessing real patient or medical files",
+    "accessing real classmates identity documents", "identifying people from camera feeds",
+    "storing faces", "storing number plates", "controlling real traffic signals",
+    "changing real signal timings", "controlling real gates", "placing real gate holds",
+    "making medical changes", "bypassing required human approval",
   "policy_version": "demo-safe-1.1",
   "automatic_actions": ["generate_id_reset_link"],
   "rules": {
