@@ -1,0 +1,74 @@
+@if (draft().status === 'submitted') {
+  <section class="card success" role="status" [attr.aria-label]="draft().title + ' request submitted'">
+    <div class="ok-icon" aria-hidden="true"><ui-icon name="check" [size]="22" /></div>
+    <h3>Request Submitted</h3>
+    <p class="kind">{{ draft().title }}</p>
+    <dl class="facts">
+      <div><dt>Request ID</dt><dd class="mono">{{ draft().requestId }}</dd></div>
+      <div><dt>Status</dt><dd><span class="badge navy">Submitted</span></dd></div>
+    </dl>
+    <p class="note">We'll keep you updated here.</p>
+    <div class="actions">
+      <button type="button" class="btn secondary" (click)="viewRequest.emit(draft().requestId!)">View Request</button>
+      <button type="button" class="btn ghost" (click)="askElse.emit()">Ask Something Else</button>
+    </div>
+    <p class="demo">Demo request · no real request was sent to SRMIST.</p>
+  </section>
+} @else {
+  <section class="card" [class.error]="draft().status === 'error'" [attr.aria-label]="draft().title + ' request ready for review'">
+    <header>
+      <span class="eyebrow">{{ draft().title }}</span>
+      <span class="state" [class.err]="draft().status === 'error'">{{ statusLabel() }}</span>
+    </header>
+
+    @if (!editing()) {
+      <dl class="fields">
+        @for (f of draft().fields; track f.key) {
+          <div><dt>{{ f.label }}</dt><dd>{{ f.value }}</dd></div>
+        }
+      </dl>
+    } @else {
+      <form class="edit" (submit)="$event.preventDefault(); saveEdit()">
+        @for (f of draft().fields; track f.key) {
+          @if (f.editable) {
+            <label>
+              <span>{{ f.label }}</span>
+              @if (f.options) {
+                <select [value]="values()[f.key]" (change)="setValue(f.key, $any($event.target).value)">
+                  @for (o of f.options; track o) { <option [value]="o" [selected]="values()[f.key] === o">{{ o }}</option> }
+                </select>
+              } @else {
+                <input type="text" maxlength="120" [value]="values()[f.key]" (input)="setValue(f.key, $any($event.target).value)" />
+              }
+            </label>
+          } @else {
+            <div class="static"><span>{{ f.label }}</span><strong>{{ f.value }}</strong></div>
+          }
+        }
+        @if (validation()) { <p class="err-msg" role="alert">{{ validation() }}</p> }
+        <div class="actions">
+          <button type="button" class="btn secondary" (click)="cancelEdit()">Cancel</button>
+          <button type="submit" class="btn primary">Save changes</button>
+        </div>
+      </form>
+    }
+
+    @if (draft().status === 'error') {
+      <p class="err-msg" role="alert"><ui-icon name="alert-circle" [size]="16" /> {{ draft().error }}</p>
+    }
+
+    @if (!editing()) {
+      <div class="actions">
+        <button type="button" class="btn secondary" (click)="startEdit()" [disabled]="busy()">
+          <ui-icon name="pencil" [size]="16" /> Edit
+        </button>
+        <button type="button" class="btn primary" (click)="confirm.emit()" [disabled]="busy()" [attr.aria-busy]="busy()">
+          @if (busy()) { <span class="spinner" aria-hidden="true"></span> Submitting… }
+          @else if (draft().status === 'error') { <ui-icon name="refresh" [size]="16" /> Try again }
+          @else { Confirm Request }
+        </button>
+      </div>
+      <p class="guard"><ui-icon name="shield-check" [size]="14" /> Nothing is submitted until you confirm.</p>
+    }
+  </section>
+}

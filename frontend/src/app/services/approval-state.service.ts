@@ -1,1 +1,0 @@
-import { Injectable, signal } from '@angular/core'; export type ApprovalState='pending'|'approved'|'rejected'; @Injectable({providedIn:'root'}) export class ApprovalStateService { state=signal<ApprovalState>('pending'); set(value:ApprovalState){this.state.set(value);} }

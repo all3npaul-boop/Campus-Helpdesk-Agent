@@ -1,0 +1,141 @@
+<campus-header />
+
+<main class="page">
+  <div class="page-head">
+    <div>
+      <h1>My Requests</h1>
+      <p class="subtitle">Track your campus services and requests in one place.</p>
+    </div>
+    @if (counts().all) {
+      <button type="button" class="btn primary" (click)="askAssistant()">
+        <ui-icon name="sparkles" [size]="18" /> Ask Campus Assist
+      </button>
+    }
+  </div>
+
+  @if (counts().all) {
+    <dl class="summary" aria-label="Request summary">
+      <div><dt>Total</dt><dd>{{ counts().all }}</dd></div>
+      <div><dt>In Progress</dt><dd>{{ counts()['in-progress'] }}</dd></div>
+      <div><dt>Completed</dt><dd>{{ counts().completed }}</dd></div>
+      <div [class.attention]="counts().awaiting > 0"><dt>Awaiting Action</dt><dd>{{ counts().awaiting }}</dd></div>
+    </dl>
+
+    <div class="filters" role="group" aria-label="Filter requests">
+      @for (f of filters; track f.id) {
+        <button type="button" class="filter" [class.on]="filter() === f.id" [attr.aria-pressed]="filter() === f.id" (click)="filter.set(f.id)">
+          {{ f.label }} <span class="count">{{ counts()[f.id] }}</span>
+        </button>
+      }
+    </div>
+    <p class="sr-only" role="status" aria-live="polite">Showing {{ visible().length }} {{ filterLabel() }} {{ visible().length === 1 ? 'request' : 'requests' }}.</p>
+
+    @if (visible().length) {
+      <ul class="list">
+        @for (r of visible(); track r.id) {
+          <li>
+            <article class="card" [class.needs-action]="r.status === 'Awaiting Action'">
+              <header>
+                <span class="cat"><span class="tile"><ui-icon [name]="icon(r)" [size]="18" /></span>{{ category(r) }}</span>
+                <span class="status" [class]="'status ' + tone(r.status)"><i aria-hidden="true"></i>{{ r.status }}</span>
+              </header>
+
+              <h2>{{ r.title }}</h2>
+              @if (r.issue) { <p class="issue">{{ r.issue }}</p> }
+              @if (r.description) { <p class="desc">{{ r.description }}</p> }
+
+              @if (r.status === 'Awaiting Action') {
+                <p class="notice"><ui-icon name="alert-circle" [size]="16" /> Waiting for your response</p>
+              }
+
+              <dl class="meta">
+                <div><dt>Request ID</dt><dd class="mono">{{ r.id }}</dd></div>
+                <div><dt>Submitted</dt><dd>{{ when(submitted(r)) }}</dd></div>
+              </dl>
+
+              <footer>
+                @if (r.origin) {
+                  <span class="prov"><ui-icon name="shield-check" [size]="15" />
+                    Created with Campus Assist@if (r.origin.confirmedByStudent) { · Confirmed by you }</span>
+                }
+                <button type="button" class="btn" [class.primary]="r.status === 'Awaiting Action'" [class.secondary]="r.status !== 'Awaiting Action'"
+                  aria-haspopup="dialog" [attr.aria-label]="'View Details for ' + r.title + ', ' + r.id" (click)="open(r, $event)">
+                  View Details <ui-icon name="chevron-right" [size]="16" />
+                </button>
+              </footer>
+            </article>
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="empty compact">
+        <ui-icon name="inbox" [size]="28" />
+        <h2>No {{ filterLabel().toLowerCase() }} requests</h2>
+        <p>Nothing matches this filter right now.</p>
+        <button type="button" class="btn secondary" (click)="filter.set('all')">Show all requests</button>
+      </div>
+    }
+
+    <p class="assurance"><ui-icon name="shield-check" [size]="16" />
+      Campus Assist prepares each request and submits it only after you confirm. You can follow up on any request in the assistant. Demo data.</p>
+  } @else {
+    <section class="empty" aria-labelledby="empty-title">
+      <span class="empty-icon"><ui-icon name="inbox" [size]="30" /></span>
+      <h2 id="empty-title">No requests yet</h2>
+      <p>Your campus service requests will appear here after you submit one through Campus Assist.</p>
+      <button type="button" class="btn primary" (click)="askAssistant()"><ui-icon name="sparkles" [size]="18" /> Ask Campus Assist</button>
+    </section>
+  }
+</main>
+
+@if (selected(); as r) {
+  <div class="scrim" (click)="close()" aria-hidden="true"></div>
+  <aside class="sheet" #sheet role="dialog" aria-modal="true" aria-labelledby="dlg-title" (keydown)="onKeydown($event)">
+    <span class="grab" aria-hidden="true"></span>
+    <header class="sheet-head">
+      <div>
+        <span class="eyebrow">{{ category(r) }}</span>
+        <h2 id="dlg-title">{{ r.title }}</h2>
+        <p class="rid mono">{{ r.id }}</p>
+      </div>
+      <button type="button" class="x" #closeBtn (click)="close()" aria-label="Close details"><ui-icon name="x" [size]="20" /></button>
+    </header>
+
+    <div class="sheet-body">
+      <dl class="facts">
+        @for (f of fields(r); track f.label) { <div><dt>{{ f.label }}</dt><dd>{{ f.value }}</dd></div> }
+        <div><dt>Submitted</dt><dd>{{ when(submitted(r)) }}</dd></div>
+        <div><dt>Status</dt><dd><span [class]="'status ' + tone(r.status)"><i aria-hidden="true"></i>{{ r.status }}</span></dd></div>
+      </dl>
+
+      <section aria-labelledby="progress-title">
+        <h3 id="progress-title">Progress</h3>
+        <ol class="timeline">
+          @for (s of timeline(r); track s.label) {
+            <li [class]="s.state">
+              <span class="node" aria-hidden="true">@if (s.state === 'done') { <ui-icon name="check" [size]="12" /> }</span>
+              <span class="step">
+                <strong>{{ s.label }}</strong>
+                <span class="state-text">@switch (s.state) { @case ('done') { Done } @case ('current') { In progress } @default { Not started } }@if (s.at) { · {{ when(s.at) }} }</span>
+              </span>
+            </li>
+          }
+        </ol>
+        <p class="updated"><ui-icon name="clock" [size]="14" /> Last updated {{ ago(r.updatedAt) }}</p>
+      </section>
+
+      @if (r.origin) {
+        <section class="origin" aria-labelledby="origin-title">
+          <h3 id="origin-title">How this request was created</h3>
+          <p>Prepared by Campus Assist@if (r.origin.confirmedByStudent) { and confirmed by you on {{ when(r.origin.confirmedAt) }}}. Nothing was submitted before you confirmed.</p>
+        </section>
+      }
+      <p class="demo">Demo request · sample data, not an official SRMIST record.</p>
+    </div>
+
+    <footer class="sheet-actions">
+      <button type="button" class="btn primary" (click)="openAssistant(r)"><ui-icon name="sparkles" [size]="18" /> Open Assistant</button>
+      <button type="button" class="btn secondary" (click)="close()">Close</button>
+    </footer>
+  </aside>
+}

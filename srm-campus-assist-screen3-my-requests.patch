@@ -1,0 +1,1193 @@
+From 6c95b20f3e548d0316a4a719dc2b9447edb9b109 Mon Sep 17 00:00:00 2001
+From: Campus Assist <dev@example.com>
+Date: Wed, 30 Sep 2026 00:02:48 +0000
+Subject: [PATCH] Add Screen 3: My Requests (/requests) with details drawer,
+ filters, empty states; extract shared header
+
+---
+ README.md                                     |  12 ++
+ frontend/src/app/app.routes.ts                |   5 +-
+ frontend/src/app/data/knowledge.demo.ts       |  10 +-
+ frontend/src/app/data/requests.demo.ts        |  95 +++++++++---
+ .../assistant/assistant.component.css         |   5 +
+ .../assistant/assistant.component.html        |   2 +-
+ .../src/app/features/home/home.component.css  |  46 +-----
+ .../src/app/features/home/home.component.html |  44 +-----
+ .../src/app/features/home/home.component.ts   |  28 +---
+ .../features/requests/requests.component.css  | 143 ++++++++++++++++++
+ .../features/requests/requests.component.html | 141 +++++++++++++++++
+ .../features/requests/requests.component.ts   | 119 +++++++++++++++
+ frontend/src/app/models/campus.models.ts      |  19 ++-
+ .../src/app/services/mock-campus-agent.api.ts |   8 +
+ .../src/app/services/request-store.service.ts |   6 +-
+ .../src/app/shared/app-header.component.css   |  51 +++++++
+ .../src/app/shared/app-header.component.html  |  43 ++++++
+ .../src/app/shared/app-header.component.ts    |  43 ++++++
+ frontend/src/app/utils/requests.ts            |  34 +++++
+ frontend/src/app/utils/text.ts                |  14 +-
+ frontend/src/styles.css                       |   1 +
+ 21 files changed, 738 insertions(+), 131 deletions(-)
+ create mode 100644 frontend/src/app/features/requests/requests.component.css
+ create mode 100644 frontend/src/app/features/requests/requests.component.html
+ create mode 100644 frontend/src/app/features/requests/requests.component.ts
+ create mode 100644 frontend/src/app/shared/app-header.component.css
+ create mode 100644 frontend/src/app/shared/app-header.component.html
+ create mode 100644 frontend/src/app/shared/app-header.component.ts
+ create mode 100644 frontend/src/app/utils/requests.ts
+
+diff --git a/README.md b/README.md
+index c473dca..59b42e9 100644
+--- a/README.md
++++ b/README.md
+@@ -95,6 +95,18 @@ The assistant shows the agent loop on every reply (understood → retrieved →
+ 
+ **All campus content in the UI is demo data** (`src/app/data/*.demo.ts`): no real SRMIST policies, fees, deadlines, contacts or URLs. Request IDs are prefixed `DEMO-`.
+ 
++### Screen 3 — My Requests (`/requests`)
++
++A student-facing request tracker (not an admin dashboard) that closes the loop **Discover → Ask → Act → Track**:
++
++- Compact summary (Total / In Progress / Completed / Awaiting Action), filters, and request cards with category, title, description, request ID, status, timestamp and an **"Created with Campus Assist · Confirmed by you"** provenance line.
++- **View Details** opens a side drawer (bottom sheet on mobile), not another page: fields, a progress timeline, "Last updated…", and how the request was created. It is a focus-trapped dialog (Esc, scrim click and Close all dismiss it and return focus).
++- **Open Assistant** goes to `/assistant?request=<id>`; the empty state's **Ask Campus Assist** goes to `/assistant`.
++- Shares the `campus-header` component with Home (My Requests is the active nav item). The nav is also shown on mobile.
++- "Completed" includes *Resolved*; "In Progress" includes newly *Submitted* requests.
++- Requests are stored by id, so re-creating a demo id (e.g. confirming the hostel request in the assistant, which issues `DEMO-HT-1042`) replaces the seeded entry instead of duplicating it.
++- Timelines for newly created requests only mark the first stage done; later stages are not claimed until a real backend reports them.
++
+ Backend-ready seams: components depend only on `CampusDataService`, `RequestStoreService` and the abstract `CampusAgentApi` (`services/campus-agent.api.ts`). The default `MockCampusAgentApi` is a deterministic in-browser agent; to use the Python agent, implement `CampusAgentApi` with `HttpClient` calls (see `agent/api_adapter.py`) and change its `useClass`.
+ 
+ ```bash
+diff --git a/frontend/src/app/app.routes.ts b/frontend/src/app/app.routes.ts
+index d9e57e8..0715d45 100644
+--- a/frontend/src/app/app.routes.ts
++++ b/frontend/src/app/app.routes.ts
+@@ -1,18 +1,21 @@
+ import { Routes } from '@angular/router';
+ import { AssistantComponent } from './features/assistant/assistant.component';
+ import { HomeComponent } from './features/home/home.component';
++import { RequestsComponent } from './features/requests/requests.component';
+ 
+ /**
+- * Two primary screens only. Every service, request and workflow happens inside /assistant.
++ * Primary screens: Home, Assistant, and My Requests (a tracker only — details open in a panel). Every service, request and workflow happens inside /assistant.
+  *   /home                         Student Home
+  *   /assistant                    AI Campus Assistant
+  *   /assistant?q=<text>           start from a typed or suggested question
+  *   /assistant?context=<id>       start from a service or topic
+  *   /assistant?request=<id>       start from an existing request
++ *   /requests                     My Requests (track, filter, open details, hand back to the assistant)
+  */
+ export const routes: Routes = [
+   { path: 'home', component: HomeComponent, title: 'Home · SRM Campus Assist' },
+   { path: 'assistant', component: AssistantComponent, title: 'Assistant · SRM Campus Assist' },
++  { path: 'requests', component: RequestsComponent, title: 'My Requests · SRM Campus Assist' },
+   { path: '', pathMatch: 'full', redirectTo: 'home' },
+   { path: '**', redirectTo: 'home' },
+ ];
+diff --git a/frontend/src/app/data/knowledge.demo.ts b/frontend/src/app/data/knowledge.demo.ts
+index 4d43e56..e1987aa 100644
+--- a/frontend/src/app/data/knowledge.demo.ts
++++ b/frontend/src/app/data/knowledge.demo.ts
+@@ -6,8 +6,14 @@ import { KnowledgeEntry, WorkflowConfig } from '../models/campus.models';
+  */
+ 
+ export const WORKFLOWS: Record<string, WorkflowConfig> = {
+-  'hostel-maintenance': { title: 'Hostel Maintenance', requestTitle: 'Hostel maintenance', idPrefix: 'HT', serviceId: 'hostel' },
+-  bonafide: { title: 'Bonafide Certificate', requestTitle: 'Bonafide certificate', idPrefix: 'BC', serviceId: 'student-services' },
++  'hostel-maintenance': {
++    title: 'Hostel Maintenance', requestTitle: 'Hostel Maintenance', idPrefix: 'HT', serviceId: 'hostel',
++    steps: ['Request submitted', 'Assigned to hostel maintenance', 'Maintenance team working', 'Issue resolved'],
++  },
++  bonafide: {
++    title: 'Bonafide Certificate', requestTitle: 'Bonafide Certificate', idPrefix: 'BC', serviceId: 'student-services',
++    steps: ['Request submitted', 'Reviewed by Student Services', 'Certificate prepared', 'Completed'],
++  },
+ };
+ 
+ /** First request ids issued per workflow in this demo session. */
+diff --git a/frontend/src/app/data/requests.demo.ts b/frontend/src/app/data/requests.demo.ts
+index 81cd1b9..f949ff1 100644
+--- a/frontend/src/app/data/requests.demo.ts
++++ b/frontend/src/app/data/requests.demo.ts
+@@ -1,39 +1,100 @@
+ import { StudentRequest } from '../models/campus.models';
+ 
+-const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
++const MIN = 60_000;
++const now = Date.now();
++const minutesAgo = (m: number) => new Date(now - m * MIN).toISOString();
++
++/** A wall-clock time on a day `daysAgo` before today, e.g. at(1, 16, 15) = yesterday 4:15 PM. */
++function at(daysAgo: number, hour: number, minute: number): Date {
++  const d = new Date(now);
++  d.setDate(d.getDate() - daysAgo);
++  d.setHours(hour, minute, 0, 0);
++  return d;
++}
++const iso = (d: Date) => d.toISOString();
++const plus = (d: Date, min: number) => new Date(d.getTime() + min * MIN);
++
++// "Today · 10:42 AM", but never later than half an hour ago, so the demo is coherent at any time of day.
++const todaySubmitted = new Date(Math.min(at(0, 10, 42).getTime(), now - 30 * MIN));
++const bonafide = at(1, 16, 15);
++const transport = at(2, 14, 30);
++const wifi = at(3, 20, 20);
++
++const origin = (d: Date) => ({ via: 'assistant' as const, confirmedByStudent: true, confirmedAt: iso(d) });
+ 
+ /** DEMO requests. Replace with the student's real request list from the backend. */
+ export const DEMO_REQUESTS: StudentRequest[] = [
+   {
+-    id: 'DEMO-HT-1038', title: 'Hostel maintenance', serviceId: 'hostel', status: 'In Progress', updatedAt: ago(5),
+-    summary: 'Bathroom light not working · B Block · Room 214',
+-    details: [{ label: 'Location', value: 'B Block · Room 214' }, { label: 'Issue', value: 'Bathroom light not working' }, { label: 'Priority', value: 'Normal' }],
++    id: 'DEMO-HT-1042', title: 'Hostel Maintenance', serviceId: 'hostel', status: 'In Progress',
++    issue: 'Leaking tap', description: 'B Block · Room 214',
++    submittedAt: iso(todaySubmitted), updatedAt: minutesAgo(12),
++    summary: 'Leaking tap · B Block · Room 214',
++    details: [{ label: 'Issue', value: 'Leaking tap' }, { label: 'Location', value: 'B Block · Room 214' }, { label: 'Priority', value: 'Normal' }],
+     history: [
+-      { status: 'Submitted', at: ago(50), note: 'Request created after your confirmation.' },
+-      { status: 'In Review', at: ago(28), note: 'Picked up by hostel maintenance (demo).' },
+-      { status: 'In Progress', at: ago(5), note: 'Work in progress (demo).' },
++      { status: 'Submitted', at: iso(todaySubmitted), note: 'Request created after your confirmation.' },
++      { status: 'In Review', at: iso(plus(todaySubmitted, 6)), note: 'Assigned to hostel maintenance (demo).' },
++      { status: 'In Progress', at: minutesAgo(12), note: 'Maintenance team working (demo).' },
+     ],
+-    isDemo: true,
++    timeline: [
++      { label: 'Request submitted', state: 'done', at: iso(todaySubmitted) },
++      { label: 'Assigned to hostel maintenance', state: 'done', at: iso(plus(todaySubmitted, 6)) },
++      { label: 'Maintenance team working', state: 'current', at: minutesAgo(12) },
++      { label: 'Issue resolved', state: 'todo' },
++    ],
++    origin: origin(todaySubmitted), isDemo: true,
+   },
+   {
+-    id: 'DEMO-BC-2071', title: 'Bonafide certificate', serviceId: 'student-services', status: 'Completed', updatedAt: ago(72),
++    id: 'DEMO-BC-2071', title: 'Bonafide Certificate', serviceId: 'student-services', status: 'Completed',
++    description: 'Purpose: scholarship application',
++    submittedAt: iso(bonafide), updatedAt: iso(plus(bonafide, 20)),
+     summary: 'Bonafide certificate · scholarship application',
+     details: [{ label: 'Certificate', value: 'Bonafide certificate' }, { label: 'Purpose', value: 'Scholarship application (demo)' }],
+     history: [
+-      { status: 'Submitted', at: ago(120), note: 'Request created after your confirmation.' },
+-      { status: 'In Review', at: ago(96), note: 'Under review by Student Services (demo).' },
+-      { status: 'Completed', at: ago(72), note: 'Marked as completed (demo).' },
++      { status: 'Submitted', at: iso(bonafide), note: 'Request created after your confirmation.' },
++      { status: 'In Review', at: iso(plus(bonafide, 8)), note: 'Under review by Student Services (demo).' },
++      { status: 'Completed', at: iso(plus(bonafide, 20)), note: 'Marked as completed (demo).' },
++    ],
++    timeline: [
++      { label: 'Request submitted', state: 'done', at: iso(bonafide) },
++      { label: 'Reviewed by Student Services', state: 'done', at: iso(plus(bonafide, 8)) },
++      { label: 'Certificate prepared', state: 'done', at: iso(plus(bonafide, 15)) },
++      { label: 'Completed', state: 'done', at: iso(plus(bonafide, 20)) },
+     ],
+-    isDemo: true,
++    origin: origin(bonafide), isDemo: true,
+   },
+   {
+-    id: 'DEMO-TR-3015', title: 'Transport enquiry', serviceId: 'transport', status: 'Resolved', updatedAt: ago(140),
++    id: 'DEMO-TR-3015', title: 'Transport Enquiry', serviceId: 'transport', status: 'Resolved',
++    description: 'KTR → Potheri shuttle',
++    submittedAt: iso(transport), updatedAt: iso(plus(transport, 25)),
+     summary: 'Shuttle frequency · KTR → Potheri',
+     details: [{ label: 'Route', value: 'KTR → Potheri' }, { label: 'Question', value: 'Shuttle frequency (demo)' }],
+     history: [
+-      { status: 'Submitted', at: ago(150), note: 'Enquiry created after your confirmation.' },
+-      { status: 'Resolved', at: ago(140), note: 'Answered by the transport desk (demo).' },
++      { status: 'Submitted', at: iso(transport), note: 'Enquiry created after your confirmation.' },
++      { status: 'Resolved', at: iso(plus(transport, 25)), note: 'Answered by the transport desk (demo).' },
++    ],
++    timeline: [
++      { label: 'Enquiry submitted', state: 'done', at: iso(transport) },
++      { label: 'Reviewed by transport desk', state: 'done', at: iso(plus(transport, 10)) },
++      { label: 'Resolved', state: 'done', at: iso(plus(transport, 25)) },
++    ],
++    origin: origin(transport), isDemo: true,
++  },
++  {
++    id: 'DEMO-WF-4108', title: 'Wi-Fi Issue', serviceId: 'facilities', status: 'Awaiting Action',
++    description: 'Hostel Wi-Fi connectivity',
++    submittedAt: iso(wifi), updatedAt: iso(plus(wifi, 45)),
++    summary: 'Hostel Wi-Fi connectivity',
++    details: [{ label: 'Issue', value: 'Hostel Wi-Fi connectivity' }, { label: 'Waiting for', value: 'Your reply in Campus Assist' }],
++    history: [
++      { status: 'Submitted', at: iso(wifi), note: 'Request created after your confirmation.' },
++      { status: 'Awaiting Action', at: iso(plus(wifi, 45)), note: 'More information is needed from you (demo).' },
++    ],
++    timeline: [
++      { label: 'Request submitted', state: 'done', at: iso(wifi) },
++      { label: 'Reviewed by Campus Facilities', state: 'done', at: iso(plus(wifi, 20)) },
++      { label: 'Waiting for your response', state: 'current', at: iso(plus(wifi, 45)) },
++      { label: 'Issue resolved', state: 'todo' },
+     ],
+-    isDemo: true,
++    origin: origin(wifi), isDemo: true,
+   },
+ ];
+diff --git a/frontend/src/app/features/assistant/assistant.component.css b/frontend/src/app/features/assistant/assistant.component.css
+index 5b9284c..470fcf3 100644
+--- a/frontend/src/app/features/assistant/assistant.component.css
++++ b/frontend/src/app/features/assistant/assistant.component.css
+@@ -113,3 +113,8 @@ time { font-size: 12px; color: var(--muted); }
+   .composer { padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); }
+   .guard { font-size: 11.5px; }
+ }
++
++.rail-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
++.rail-head h2 { margin: 0; }
++.rail-head a { font-size: 13px; font-weight: 600; color: var(--burgundy-600); padding: 4px; border-radius: 6px; }
++.rail-head a:hover { color: var(--burgundy-700); text-decoration: underline; }
+diff --git a/frontend/src/app/features/assistant/assistant.component.html b/frontend/src/app/features/assistant/assistant.component.html
+index bfb39bc..3acbb49 100644
+--- a/frontend/src/app/features/assistant/assistant.component.html
++++ b/frontend/src/app/features/assistant/assistant.component.html
+@@ -134,7 +134,7 @@
+         </ul>
+       </section>
+       <section class="rail-card">
+-        <h2>Your requests</h2>
++        <div class="rail-head"><h2>Your requests</h2><a routerLink="/requests">View all</a></div>
+         @if (store.recent().length) {
+           <ul class="mini">
+             @for (r of store.recent().slice(0, 4); track r.id) {
+diff --git a/frontend/src/app/features/home/home.component.css b/frontend/src/app/features/home/home.component.css
+index 5513a81..b0e8b33 100644
+--- a/frontend/src/app/features/home/home.component.css
++++ b/frontend/src/app/features/home/home.component.css
+@@ -1,41 +1,5 @@
+ :host { display: block; min-height: 100dvh; }
+ 
+-/* ---------- Top bar ---------- */
+-.topbar { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }
+-.topbar-inner { max-width: 1200px; margin: 0 auto; height: 68px; padding: 0 24px; display: flex; align-items: center; gap: 16px; }
+-.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+-.mark {
+-  position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px;
+-  background: var(--navy-900); color: #fff; font-weight: 800; font-size: 12px; letter-spacing: 0.02em; overflow: hidden;
+-}
+-.mark::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 6px; height: 3px; border-radius: 2px; background: var(--burgundy-600); }
+-.brand-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+-.brand-text strong { font-size: 15px; letter-spacing: 0.01em; color: var(--navy-900); }
+-.brand-text span { font-size: 12px; color: var(--muted); white-space: nowrap; }
+-.divider { width: 1px; height: 26px; background: var(--line-strong); }
+-.product { font-weight: 700; font-size: 15px; color: var(--burgundy-600); white-space: nowrap; }
+-.nav { margin-left: 12px; display: flex; gap: 4px; }
+-.nav a { padding: 8px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--muted); transition: background 0.15s, color 0.15s; }
+-.nav a:hover { background: var(--navy-50); color: var(--navy-900); }
+-.nav a.active { background: var(--navy-100); color: var(--navy-900); }
+-.tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+-.icon-btn { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; color: var(--navy-900); transition: background 0.15s; }
+-.icon-btn:hover { background: var(--navy-50); }
+-.dot { position: absolute; top: 10px; right: 11px; width: 9px; height: 9px; border-radius: 50%; background: var(--burgundy-600); border: 2px solid #fff; }
+-.avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--navy-100); color: var(--navy-900); font-weight: 700; border: 1px solid var(--navy-200); }
+-.notif { position: relative; }
+-.popover {
+-  position: absolute; right: 0; top: calc(100% + 8px); width: min(340px, calc(100vw - 32px));
+-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-md); padding: 8px;
+-}
+-.pop-title { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; font-weight: 700; font-size: 14px; }
+-.notif-item { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px; border-radius: 12px; transition: background 0.15s; }
+-.notif-item:hover { background: var(--navy-50); }
+-.notif-item.unread { background: var(--burgundy-50); }
+-.notif-text { font-size: 14px; }
+-.notif-time { font-size: 12px; color: var(--muted); }
+-.empty-small { padding: 12px 10px; color: var(--muted); font-size: 14px; }
+-
+ /* ---------- Page ---------- */
+ .page { max-width: 1200px; margin: 0 auto; padding: 24px 24px 40px; }
+ 
+@@ -125,19 +89,19 @@ h2 { font-size: 20px; letter-spacing: -0.01em; font-weight: 700; }
+ 
+ /* ---------- Responsive ---------- */
+ @media (max-width: 1023px) {
+-  .grid { grid-template-columns: 1fr; gap: 28px; }
++  .grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+   .side { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+ }
+ @media (max-width: 720px) {
+-  .topbar-inner { padding: 0 16px; gap: 12px; height: 60px; }
+-  .divider, .nav { display: none; }
+-  .brand-text span { display: none; }
+   .page { padding: 16px 16px 32px; }
+   .hero { border-radius: 20px; }
+-  .side { grid-template-columns: 1fr; }
++  .side { grid-template-columns: minmax(0, 1fr); }
+   .ask { min-height: 60px; padding-left: 14px; }
+   .ask input { font-size: 16px; }
+   .ask-btn { width: 46px; height: 46px; }
+   .topics { padding-left: 18px; }
+   .service-grid { grid-template-columns: 1fr; }
+ }
++
++.view-all { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--burgundy-600); padding: 6px 4px; border-radius: 6px; }
++.view-all:hover { color: var(--burgundy-700); text-decoration: underline; }
+diff --git a/frontend/src/app/features/home/home.component.html b/frontend/src/app/features/home/home.component.html
+index 941946e..3f60b2a 100644
+--- a/frontend/src/app/features/home/home.component.html
++++ b/frontend/src/app/features/home/home.component.html
+@@ -1,45 +1,4 @@
+-<header class="topbar">
+-  <div class="topbar-inner">
+-    <a class="brand" routerLink="/home" aria-label="SRM Campus Assist — Home">
+-      <span class="mark" aria-hidden="true">SRM</span>
+-      <span class="brand-text">
+-        <strong>SRMIST</strong>
+-        <span>Kattankulathur Campus</span>
+-      </span>
+-    </a>
+-    <span class="divider" aria-hidden="true"></span>
+-    <span class="product">Campus Assist</span>
+-
+-    <nav class="nav" aria-label="Primary">
+-      <a routerLink="/home" routerLinkActive="active" ariaCurrentWhenActive="page">Home</a>
+-    </nav>
+-
+-    <div class="tools">
+-      <div class="notif">
+-        <button type="button" class="icon-btn" (click)="notifOpen.set(!notifOpen()); $event.stopPropagation()"
+-          [attr.aria-expanded]="notifOpen()" aria-haspopup="dialog"
+-          [attr.aria-label]="unreadCount() ? 'Notifications, ' + unreadCount() + ' unread' : 'Notifications'">
+-          <ui-icon name="bell" [size]="20" />
+-          @if (unreadCount()) { <span class="dot" aria-hidden="true"></span> }
+-        </button>
+-        @if (notifOpen()) {
+-          <div class="popover" role="dialog" aria-label="Notifications">
+-            <p class="pop-title">Notifications <span class="demo-pill">Demo</span></p>
+-            @for (n of data.notifications(); track n.id) {
+-              <button type="button" class="notif-item" [class.unread]="n.unread" (click)="openNotification(n.id, n.requestId)">
+-                <span class="notif-text">{{ n.text }}</span>
+-                <span class="notif-time">{{ ago(n.at) }}</span>
+-              </button>
+-            } @empty {
+-              <p class="empty-small">You're all caught up.</p>
+-            }
+-          </div>
+-        }
+-      </div>
+-      <span class="avatar" [attr.title]="data.student.fullName" role="img" [attr.aria-label]="'Profile: ' + data.student.fullName">{{ data.student.initials }}</span>
+-    </div>
+-  </div>
+-</header>
++<campus-header />
+ 
+ <main class="page">
+   <section class="hero" aria-labelledby="hero-title">
+@@ -113,6 +72,7 @@
+       <section class="panel" aria-labelledby="recent-title">
+         <div class="panel-head">
+           <h2 id="recent-title">Recent requests</h2>
++          <a class="view-all" routerLink="/requests">View all <ui-icon name="arrow-right" [size]="14" /></a>
+         </div>
+         @if (recent().length) {
+           <ul class="req-list">
+diff --git a/frontend/src/app/features/home/home.component.ts b/frontend/src/app/features/home/home.component.ts
+index 4f2f91c..65e3c71 100644
+--- a/frontend/src/app/features/home/home.component.ts
++++ b/frontend/src/app/features/home/home.component.ts
+@@ -1,28 +1,26 @@
+-import { Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
+-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
++import { Component, computed, inject, signal } from '@angular/core';
++import { Router, RouterLink } from '@angular/router';
+ import { CampusService, StudentRequest } from '../../models/campus.models';
+ import { CampusDataService } from '../../services/student.service';
+ import { RequestStoreService } from '../../services/request-store.service';
++import { AppHeaderComponent } from '../../shared/app-header.component';
+ import { IconComponent } from '../../shared/icon.component';
+ import { greeting, statusTone, timeAgo } from '../../utils/text';
+ 
+ @Component({
+   selector: 'campus-home',
+-  imports: [RouterLink, RouterLinkActive, IconComponent],
++  imports: [RouterLink, AppHeaderComponent, IconComponent],
+   templateUrl: './home.component.html',
+   styleUrl: './home.component.css',
+ })
+ export class HomeComponent {
+   private router = inject(Router);
+-  private host = inject<ElementRef<HTMLElement>>(ElementRef);
+   protected data = inject(CampusDataService);
+   protected store = inject(RequestStoreService);
+ 
+   protected readonly greeting = greeting();
+   protected readonly query = signal('');
+-  protected readonly notifOpen = signal(false);
+   protected readonly recent = computed(() => this.store.recent().slice(0, 4));
+-  protected readonly unreadCount = computed(() => this.data.notifications().filter(n => n.unread).length);
+   protected readonly tone = statusTone;
+   protected readonly ago = (iso: string) => timeAgo(iso);
+ 
+@@ -47,25 +45,7 @@ export class HomeComponent {
+     this.router.navigate(['/assistant'], { queryParams: { request: request.id } });
+   }
+ 
+-  protected openNotification(id: string, requestId?: string): void {
+-    this.data.markNotificationRead(id);
+-    this.notifOpen.set(false);
+-    if (requestId) this.router.navigate(['/assistant'], { queryParams: { request: requestId } });
+-  }
+-
+   protected serviceIcon(request: StudentRequest) {
+     return this.data.serviceById(request.serviceId)?.icon ?? 'file-text';
+   }
+-
+-  @HostListener('document:click', ['$event'])
+-  protected onDocumentClick(event: Event): void {
+-    if (this.notifOpen() && !this.host.nativeElement.querySelector('.notif')?.contains(event.target as Node)) {
+-      this.notifOpen.set(false);
+-    }
+-  }
+-
+-  @HostListener('document:keydown.escape')
+-  protected onEscape(): void {
+-    this.notifOpen.set(false);
+-  }
+ }
+diff --git a/frontend/src/app/features/requests/requests.component.css b/frontend/src/app/features/requests/requests.component.css
+new file mode 100644
+index 0000000..d6a5711
+--- /dev/null
++++ b/frontend/src/app/features/requests/requests.component.css
+@@ -0,0 +1,143 @@
++:host { display: block; min-height: 100dvh; }
++.page { max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; }
++.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
++.mono { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
++
++/* ---------- Page head ---------- */
++.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
++h1 { font-size: clamp(28px, 4vw, 36px); line-height: 1.1; letter-spacing: -0.03em; font-weight: 800; color: var(--navy-900); }
++.subtitle { margin-top: 6px; color: var(--muted); font-size: 16px; }
++
++/* ---------- Buttons (same language as the assistant's cards) ---------- */
++.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 12px; font-weight: 600; font-size: 15px; white-space: nowrap; transition: background 0.15s, border-color 0.15s, transform 0.1s; }
++.btn:active:not(:disabled) { transform: scale(0.98); }
++.btn.primary { background: var(--burgundy-600); color: #fff; }
++.btn.primary:hover { background: var(--burgundy-700); }
++.btn.secondary { background: #fff; color: var(--navy-900); border: 1px solid var(--line-strong); }
++.btn.secondary:hover { background: var(--navy-50); border-color: var(--navy-200); }
++
++/* ---------- Summary ---------- */
++.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 28px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
++.summary > div { display: flex; flex-direction: column-reverse; gap: 2px; padding: 16px 20px; border-left: 1px solid var(--line); min-width: 0; }
++.summary > div:first-child { border-left: 0; }
++.summary dt { font-size: 12.5px; font-weight: 600; color: var(--muted); }
++.summary dd { margin: 0; font-size: 28px; line-height: 1.1; font-weight: 800; letter-spacing: -0.02em; color: var(--navy-900); }
++.summary .attention dd { color: var(--burgundy-600); }
++
++/* ---------- Filters ---------- */
++.filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 20px; }
++.filter { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--muted); background: var(--surface); border: 1px solid var(--line-strong); transition: background 0.15s, border-color 0.15s, color 0.15s; }
++.filter:hover { background: var(--navy-50); color: var(--navy-900); }
++.filter.on { background: var(--navy-900); border-color: var(--navy-900); color: #fff; }
++.count { font-size: 12px; font-weight: 700; min-width: 20px; padding: 2px 6px; border-radius: 999px; background: var(--navy-100); color: var(--navy-900); text-align: center; }
++.filter.on .count { background: rgba(255, 255, 255, 0.2); color: #fff; }
++
++/* ---------- Request cards ---------- */
++.list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
++.list > li { display: flex; min-width: 0; }
++.card { display: flex; flex-direction: column; width: 100%; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); transition: border-color 0.15s, box-shadow 0.15s; }
++.card:hover, .card:focus-within { border-color: var(--navy-200); box-shadow: var(--shadow-md); }
++.card.needs-action { border-color: #ebc3cb; border-top: 4px solid var(--burgundy-600); }
++.card > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
++.cat { display: inline-flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--navy-800); }
++.tile { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--navy-50); color: var(--navy-800); }
++.card h2 { margin-top: 14px; font-size: 20px; letter-spacing: -0.01em; color: var(--navy-900); }
++.issue { margin-top: 2px; font-weight: 600; }
++.desc { color: var(--muted); font-size: 14px; margin-top: 2px; }
++.notice { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 13.5px; font-weight: 600; color: var(--burgundy-700); }
++.meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 12px 28px; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
++dt { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
++dd { margin: 2px 0 0; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
++.card footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: auto; padding-top: 16px; }
++.prov { display: inline-flex; align-items: flex-start; gap: 6px; flex: 1 1 200px; min-width: 0; font-size: 12.5px; color: var(--muted); }
++.prov ui-icon { color: var(--green); margin-top: 1px; }
++
++/* Status pill with a colour dot (colour is never the only signal: the text is always shown) */
++.status { display: inline-flex; align-items: center; gap: 7px; flex: none; font-size: 12.5px; font-weight: 600; line-height: 1; padding: 7px 11px; border-radius: 999px; white-space: nowrap; }
++.status i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
++.status.navy { color: var(--navy-800); background: var(--navy-100); }
++.status.amber { color: var(--amber); background: var(--amber-50); }
++.status.green { color: var(--green); background: var(--green-50); }
++.status.red { color: var(--burgundy-700); background: var(--burgundy-50); }
++
++/* ---------- Empty ---------- */
++.empty { display: grid; justify-items: center; gap: 10px; margin-top: 32px; padding: 56px 24px; text-align: center; background: var(--surface); border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); }
++.empty.compact { padding: 40px 24px; margin-top: 8px; color: var(--muted); }
++.empty-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: var(--navy-50); color: var(--navy-800); }
++.empty h2 { font-size: 22px; letter-spacing: -0.01em; color: var(--navy-900); }
++.empty p { max-width: 420px; color: var(--muted); }
++.empty .btn { margin-top: 8px; }
++.assurance { display: flex; align-items: flex-start; gap: 8px; margin-top: 28px; color: var(--muted); font-size: 13px; }
++.assurance ui-icon { color: var(--green); margin-top: 1px; }
++
++/* ---------- Details: side drawer on desktop, bottom sheet on mobile ---------- */
++.scrim { position: fixed; inset: 0; z-index: 40; background: rgba(7, 23, 51, 0.5); animation: fade 0.18s ease-out; }
++.sheet { position: fixed; z-index: 50; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); display: flex; flex-direction: column; background: var(--surface); box-shadow: -12px 0 40px rgba(7, 23, 51, 0.25); animation: slide-in 0.22s ease-out; }
++.grab { display: none; }
++.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 24px 24px 16px; border-bottom: 1px solid var(--line); }
++.eyebrow { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--burgundy-600); }
++.sheet-head h2 { margin-top: 2px; font-size: 22px; letter-spacing: -0.01em; color: var(--navy-900); }
++.rid { margin-top: 2px; color: var(--muted); font-weight: 600; }
++.x { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -6px -8px 0 0; border-radius: 999px; color: var(--navy-900); transition: background 0.15s; }
++.x:hover { background: var(--navy-50); }
++.sheet-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 20px 24px; display: grid; gap: 24px; align-content: start; }
++.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
++.facts dd { font-size: 15px; }
++.sheet h3 { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--navy-800); margin-bottom: 12px; }
++
++.timeline { display: grid; gap: 0; list-style: none; margin: 0; padding: 0; }
++.timeline li { position: relative; display: flex; gap: 14px; padding-bottom: 18px; }
++.timeline li:last-child { padding-bottom: 0; }
++.timeline li::before { content: ''; position: absolute; left: 11px; top: 26px; bottom: 2px; width: 2px; background: var(--line-strong); }
++.timeline li:last-child::before { display: none; }
++.timeline li.done::before { background: var(--green); }
++.node { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line-strong); background: #fff; color: #fff; }
++.done .node { background: var(--green); border-color: var(--green); }
++.current .node { border-color: var(--burgundy-600); box-shadow: 0 0 0 4px var(--burgundy-50); }
++.current .node::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--burgundy-600); animation: pulse 1.6s ease-in-out infinite; }
++.step { display: flex; flex-direction: column; line-height: 1.35; min-width: 0; padding-top: 2px; }
++.step strong { font-size: 14.5px; color: var(--navy-900); }
++.todo .step strong { color: var(--faint); font-weight: 600; }
++.state-text { font-size: 12.5px; color: var(--muted); }
++.updated { display: flex; align-items: center; gap: 6px; margin-top: 16px; font-size: 13px; color: var(--muted); }
++.origin { padding: 14px 16px; border-radius: 14px; background: var(--navy-50); border: 1px solid var(--navy-100); }
++.origin h3 { margin-bottom: 6px; }
++.origin p { font-size: 14px; }
++.demo { font-size: 12px; color: var(--faint); }
++.sheet-actions { display: flex; gap: 10px; padding: 16px 24px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
++.sheet-actions .primary { flex: 1; }
++
++@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
++@keyframes slide-in { from { transform: translateX(32px); opacity: 0; } to { transform: none; opacity: 1; } }
++@keyframes slide-up { from { transform: translateY(32px); opacity: 0; } to { transform: none; opacity: 1; } }
++@keyframes pulse { 50% { transform: scale(1.5); opacity: 0.5; } }
++
++/* ---------- Responsive ---------- */
++@media (max-width: 899px) {
++  .list { grid-template-columns: 1fr; }
++}
++@media (max-width: 720px) {
++  .page { padding: 20px 16px 40px; }
++  .page-head .btn { width: 100%; }
++  .summary { margin-top: 20px; }
++  .summary > div { padding: 12px 10px; }
++  .summary dd { font-size: 24px; }
++  .summary dt { font-size: 11.5px; }
++  .filters { gap: 6px; }
++  .filter { padding: 0 12px; font-size: 13.5px; }
++  .card { padding: 16px; }
++  .card footer .btn { width: 100%; }
++  .prov { flex-basis: 100%; }
++  .sheet { top: auto; left: 0; right: 0; width: 100%; max-height: 92dvh; border-radius: 24px 24px 0 0; box-shadow: 0 -12px 40px rgba(7, 23, 51, 0.3); animation: slide-up 0.24s ease-out; }
++  .grab { display: block; width: 40px; height: 4px; margin: 10px auto 0; border-radius: 2px; background: var(--line-strong); }
++  .sheet-head { padding: 12px 16px 12px; }
++  .sheet-body { padding: 16px; }
++  .sheet-actions { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
++}
++@media (max-width: 520px) {
++  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
++  .summary > div { border-left: 0; border-top: 1px solid var(--line); padding: 12px 16px; }
++  .summary > div:nth-child(-n + 2) { border-top: 0; }
++  .summary > div:nth-child(even) { border-left: 1px solid var(--line); }
++}
++@media (max-width: 380px) { .meta { grid-template-columns: minmax(0, 1fr); gap: 10px; } .facts { grid-template-columns: 1fr; } }
+diff --git a/frontend/src/app/features/requests/requests.component.html b/frontend/src/app/features/requests/requests.component.html
+new file mode 100644
+index 0000000..ed6f321
+--- /dev/null
++++ b/frontend/src/app/features/requests/requests.component.html
+@@ -0,0 +1,141 @@
++<campus-header />
++
++<main class="page">
++  <div class="page-head">
++    <div>
++      <h1>My Requests</h1>
++      <p class="subtitle">Track your campus services and requests in one place.</p>
++    </div>
++    @if (counts().all) {
++      <button type="button" class="btn primary" (click)="askAssistant()">
++        <ui-icon name="sparkles" [size]="18" /> Ask Campus Assist
++      </button>
++    }
++  </div>
++
++  @if (counts().all) {
++    <dl class="summary" aria-label="Request summary">
++      <div><dt>Total</dt><dd>{{ counts().all }}</dd></div>
++      <div><dt>In Progress</dt><dd>{{ counts()['in-progress'] }}</dd></div>
++      <div><dt>Completed</dt><dd>{{ counts().completed }}</dd></div>
++      <div [class.attention]="counts().awaiting > 0"><dt>Awaiting Action</dt><dd>{{ counts().awaiting }}</dd></div>
++    </dl>
++
++    <div class="filters" role="group" aria-label="Filter requests">
++      @for (f of filters; track f.id) {
++        <button type="button" class="filter" [class.on]="filter() === f.id" [attr.aria-pressed]="filter() === f.id" (click)="filter.set(f.id)">
++          {{ f.label }} <span class="count">{{ counts()[f.id] }}</span>
++        </button>
++      }
++    </div>
++    <p class="sr-only" role="status" aria-live="polite">Showing {{ visible().length }} {{ filterLabel() }} {{ visible().length === 1 ? 'request' : 'requests' }}.</p>
++
++    @if (visible().length) {
++      <ul class="list">
++        @for (r of visible(); track r.id) {
++          <li>
++            <article class="card" [class.needs-action]="r.status === 'Awaiting Action'">
++              <header>
++                <span class="cat"><span class="tile"><ui-icon [name]="icon(r)" [size]="18" /></span>{{ category(r) }}</span>
++                <span class="status" [class]="'status ' + tone(r.status)"><i aria-hidden="true"></i>{{ r.status }}</span>
++              </header>
++
++              <h2>{{ r.title }}</h2>
++              @if (r.issue) { <p class="issue">{{ r.issue }}</p> }
++              @if (r.description) { <p class="desc">{{ r.description }}</p> }
++
++              @if (r.status === 'Awaiting Action') {
++                <p class="notice"><ui-icon name="alert-circle" [size]="16" /> Waiting for your response</p>
++              }
++
++              <dl class="meta">
++                <div><dt>Request ID</dt><dd class="mono">{{ r.id }}</dd></div>
++                <div><dt>Submitted</dt><dd>{{ when(submitted(r)) }}</dd></div>
++              </dl>
++
++              <footer>
++                @if (r.origin) {
++                  <span class="prov"><ui-icon name="shield-check" [size]="15" />
++                    Created with Campus Assist@if (r.origin.confirmedByStudent) { · Confirmed by you }</span>
++                }
++                <button type="button" class="btn" [class.primary]="r.status === 'Awaiting Action'" [class.secondary]="r.status !== 'Awaiting Action'"
++                  aria-haspopup="dialog" [attr.aria-label]="'View Details for ' + r.title + ', ' + r.id" (click)="open(r, $event)">
++                  View Details <ui-icon name="chevron-right" [size]="16" />
++                </button>
++              </footer>
++            </article>
++          </li>
++        }
++      </ul>
++    } @else {
++      <div class="empty compact">
++        <ui-icon name="inbox" [size]="28" />
++        <h2>No {{ filterLabel().toLowerCase() }} requests</h2>
++        <p>Nothing matches this filter right now.</p>
++        <button type="button" class="btn secondary" (click)="filter.set('all')">Show all requests</button>
++      </div>
++    }
++
++    <p class="assurance"><ui-icon name="shield-check" [size]="16" />
++      Campus Assist prepares each request and submits it only after you confirm. You can follow up on any request in the assistant. Demo data.</p>
++  } @else {
++    <section class="empty" aria-labelledby="empty-title">
++      <span class="empty-icon"><ui-icon name="inbox" [size]="30" /></span>
++      <h2 id="empty-title">No requests yet</h2>
++      <p>Your campus service requests will appear here after you submit one through Campus Assist.</p>
++      <button type="button" class="btn primary" (click)="askAssistant()"><ui-icon name="sparkles" [size]="18" /> Ask Campus Assist</button>
++    </section>
++  }
++</main>
++
++@if (selected(); as r) {
++  <div class="scrim" (click)="close()" aria-hidden="true"></div>
++  <aside class="sheet" #sheet role="dialog" aria-modal="true" aria-labelledby="dlg-title" (keydown)="onKeydown($event)">
++    <span class="grab" aria-hidden="true"></span>
++    <header class="sheet-head">
++      <div>
++        <span class="eyebrow">{{ category(r) }}</span>
++        <h2 id="dlg-title">{{ r.title }}</h2>
++        <p class="rid mono">{{ r.id }}</p>
++      </div>
++      <button type="button" class="x" #closeBtn (click)="close()" aria-label="Close details"><ui-icon name="x" [size]="20" /></button>
++    </header>
++
++    <div class="sheet-body">
++      <dl class="facts">
++        @for (f of fields(r); track f.label) { <div><dt>{{ f.label }}</dt><dd>{{ f.value }}</dd></div> }
++        <div><dt>Submitted</dt><dd>{{ when(submitted(r)) }}</dd></div>
++        <div><dt>Status</dt><dd><span [class]="'status ' + tone(r.status)"><i aria-hidden="true"></i>{{ r.status }}</span></dd></div>
++      </dl>
++
++      <section aria-labelledby="progress-title">
++        <h3 id="progress-title">Progress</h3>
++        <ol class="timeline">
++          @for (s of timeline(r); track s.label) {
++            <li [class]="s.state">
++              <span class="node" aria-hidden="true">@if (s.state === 'done') { <ui-icon name="check" [size]="12" /> }</span>
++              <span class="step">
++                <strong>{{ s.label }}</strong>
++                <span class="state-text">@switch (s.state) { @case ('done') { Done } @case ('current') { In progress } @default { Not started } }@if (s.at) { · {{ when(s.at) }} }</span>
++              </span>
++            </li>
++          }
++        </ol>
++        <p class="updated"><ui-icon name="clock" [size]="14" /> Last updated {{ ago(r.updatedAt) }}</p>
++      </section>
++
++      @if (r.origin) {
++        <section class="origin" aria-labelledby="origin-title">
++          <h3 id="origin-title">How this request was created</h3>
++          <p>Prepared by Campus Assist@if (r.origin.confirmedByStudent) { and confirmed by you on {{ when(r.origin.confirmedAt) }}}. Nothing was submitted before you confirmed.</p>
++        </section>
++      }
++      <p class="demo">Demo request · sample data, not an official SRMIST record.</p>
++    </div>
++
++    <footer class="sheet-actions">
++      <button type="button" class="btn primary" (click)="openAssistant(r)"><ui-icon name="sparkles" [size]="18" /> Open Assistant</button>
++      <button type="button" class="btn secondary" (click)="close()">Close</button>
++    </footer>
++  </aside>
++}
+diff --git a/frontend/src/app/features/requests/requests.component.ts b/frontend/src/app/features/requests/requests.component.ts
+new file mode 100644
+index 0000000..b776bc0
+--- /dev/null
++++ b/frontend/src/app/features/requests/requests.component.ts
+@@ -0,0 +1,119 @@
++import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, signal, viewChild } from '@angular/core';
++import { Router } from '@angular/router';
++import { StudentRequest } from '../../models/campus.models';
++import { CampusDataService } from '../../services/student.service';
++import { RequestStoreService } from '../../services/request-store.service';
++import { AppHeaderComponent } from '../../shared/app-header.component';
++import { IconComponent } from '../../shared/icon.component';
++import { REQUEST_FILTERS, RequestFilter, bucketOf, submittedAt, timelineOf } from '../../utils/requests';
++import { friendlyTime, statusTone, timeAgo } from '../../utils/text';
++
++/**
++ * Screen 3 — My Requests. A student-facing tracker: every request here was prepared by Campus Assist
++ * and confirmed by the student. Details open in a side drawer (bottom sheet on mobile); there is no
++ * separate details page, and follow-up happens back in /assistant.
++ */
++@Component({
++  selector: 'campus-requests',
++  imports: [AppHeaderComponent, IconComponent],
++  templateUrl: './requests.component.html',
++  styleUrl: './requests.component.css',
++})
++export class RequestsComponent {
++  private router = inject(Router);
++  private injector = inject(Injector);
++  private destroyRef = inject(DestroyRef);
++  protected data = inject(CampusDataService);
++  protected store = inject(RequestStoreService);
++
++  protected readonly filters = REQUEST_FILTERS;
++  protected readonly filter = signal<RequestFilter>('all');
++  protected readonly openId = signal<string | null>(null);
++
++  protected readonly sorted = computed(() =>
++    [...this.store.requests()].sort((a, b) => submittedAt(b).localeCompare(submittedAt(a))));
++  protected readonly counts = computed(() => {
++    const list = this.store.requests();
++    const n = (b: string) => list.filter(r => bucketOf(r.status) === b).length;
++    return { all: list.length, 'in-progress': n('in-progress'), completed: n('completed'), awaiting: n('awaiting') };
++  });
++  protected readonly visible = computed(() => {
++    const f = this.filter();
++    return f === 'all' ? this.sorted() : this.sorted().filter(r => bucketOf(r.status) === f);
++  });
++  protected readonly selected = computed(() => {
++    const id = this.openId();
++    return id ? this.store.byId(id) : undefined;
++  });
++  protected readonly filterLabel = computed(() => this.filters.find(f => f.id === this.filter())?.label ?? '');
++
++  protected readonly tone = statusTone;
++  protected readonly when = (iso: string) => friendlyTime(iso);
++  protected readonly ago = (iso: string) => timeAgo(iso);
++  protected readonly submitted = submittedAt;
++  protected readonly timeline = timelineOf;
++
++  private closeBtn = viewChild<ElementRef<HTMLButtonElement>>('closeBtn');
++  private sheet = viewChild<ElementRef<HTMLElement>>('sheet');
++  private trigger: HTMLElement | null = null;
++
++  constructor() {
++    // Lock page scroll while the details panel is open.
++    effect(() => {
++      document.body.style.overflow = this.openId() ? 'hidden' : '';
++    });
++    this.destroyRef.onDestroy(() => (document.body.style.overflow = ''));
++  }
++
++  protected category(r: StudentRequest): string {
++    return this.data.serviceById(r.serviceId)?.title ?? 'Campus service';
++  }
++
++  protected icon(r: StudentRequest) {
++    return this.data.serviceById(r.serviceId)?.icon ?? 'file-text';
++  }
++
++  protected open(r: StudentRequest, event: Event): void {
++    this.trigger = event.currentTarget as HTMLElement;
++    this.openId.set(r.id);
++    afterNextRender(() => this.closeBtn()?.nativeElement.focus(), { injector: this.injector });
++  }
++
++  protected close(): void {
++    if (!this.openId()) return;
++    this.openId.set(null);
++    const t = this.trigger;
++    this.trigger = null;
++    setTimeout(() => t?.focus());
++  }
++
++  protected openAssistant(r: StudentRequest): void {
++    this.router.navigate(['/assistant'], { queryParams: { request: r.id } });
++  }
++
++  protected askAssistant(): void {
++    this.router.navigate(['/assistant']);
++  }
++
++  /** Details in reading order: the issue first, then the remaining fields. */
++  protected fields(r: StudentRequest): { label: string; value: string }[] {
++    return [...r.details].sort((a, b) => Number(b.label === 'Issue') - Number(a.label === 'Issue'));
++  }
++
++  protected onKeydown(event: KeyboardEvent): void {
++    if (event.key === 'Escape') {
++      event.preventDefault();
++      this.close();
++      return;
++    }
++    if (event.key !== 'Tab') return;
++    // Keep keyboard focus inside the open dialog.
++    const focusable = Array.from(this.sheet()?.nativeElement.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]') ?? []);
++    if (!focusable.length) return;
++    const first = focusable[0];
++    const last = focusable[focusable.length - 1];
++    const active = document.activeElement;
++    if (event.shiftKey && active === first) { event.preventDefault(); last.focus(); }
++    else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
++  }
++}
+diff --git a/frontend/src/app/models/campus.models.ts b/frontend/src/app/models/campus.models.ts
+index a94a7a4..111b370 100644
+--- a/frontend/src/app/models/campus.models.ts
++++ b/frontend/src/app/models/campus.models.ts
+@@ -39,10 +39,16 @@ export interface CampusStatusItem {
+   icon: IconName;
+ }
+ 
+-export type RequestStatus = 'Submitted' | 'In Review' | 'In Progress' | 'Completed' | 'Resolved';
++export type RequestStatus = 'Submitted' | 'In Review' | 'In Progress' | 'Awaiting Action' | 'Completed' | 'Resolved';
+ 
+ export interface RequestEvent { status: RequestStatus; at: string; note: string; }
+ 
++export type TimelineState = 'done' | 'current' | 'todo';
++export interface TimelineStep { label: string; state: TimelineState; at?: string; }
++
++/** How a request came to exist. Requests are only ever created after the student confirms a prepared draft. */
++export interface RequestOrigin { via: 'assistant'; confirmedByStudent: boolean; confirmedAt: string; }
++
+ export interface StudentRequest {
+   id: string;
+   title: string;
+@@ -53,6 +59,15 @@ export interface StudentRequest {
+   details: { label: string; value: string }[];
+   history: RequestEvent[];
+   isDemo: boolean;
++  /** Short line under the title, e.g. the issue ("Leaking tap"). */
++  issue?: string;
++  /** Muted context line, e.g. a location or route. */
++  description?: string;
++  /** When the student submitted it. Falls back to the first history event. */
++  submittedAt?: string;
++  /** Progress shown on My Requests. */
++  timeline?: TimelineStep[];
++  origin?: RequestOrigin;
+ }
+ 
+ export interface CampusNotification {
+@@ -148,4 +163,6 @@ export interface WorkflowConfig {
+   requestTitle: string;
+   idPrefix: string;
+   serviceId: string;
++  /** Stages shown on the request timeline, in order. */
++  steps: string[];
+ }
+diff --git a/frontend/src/app/services/mock-campus-agent.api.ts b/frontend/src/app/services/mock-campus-agent.api.ts
+index 7d8e274..2231df1 100644
+--- a/frontend/src/app/services/mock-campus-agent.api.ts
++++ b/frontend/src/app/services/mock-campus-agent.api.ts
+@@ -45,11 +45,19 @@ export class MockCampusAgentApi implements CampusAgentApi {
+       if (draft.fields.some(f => !f.value.trim())) throw new Error('Some details are missing.');
+       const now = new Date().toISOString();
+       const id = this.store.nextId(workflow.idPrefix);
++      const value = (key: string) => draft.fields.find(f => f.key === key)?.value;
+       const request: StudentRequest = {
+         id, title: workflow.requestTitle, serviceId: workflow.serviceId, status: 'Submitted', updatedAt: now,
++        issue: value('issue'),
++        description: value('location') ?? (value('purpose') ? `Purpose: ${value('purpose')}` : undefined),
++        submittedAt: now,
+         summary: draft.fields.filter(f => f.key !== 'priority').map(f => f.value).join(' · '),
+         details: draft.fields.map(f => ({ label: f.label, value: f.value })),
+         history: [{ status: 'Submitted', at: now, note: 'Request created after your confirmation.' }],
++        // Only the first stage is done; nothing later is claimed until a real backend reports it.
++        timeline: workflow.steps.map((label, i) => ({ label, state: i === 0 ? 'done' : i === 1 ? 'current' : 'todo', ...(i === 0 ? { at: now } : {}) })),
++        // submitRequest is only ever called after the student presses "Confirm Request".
++        origin: { via: 'assistant', confirmedByStudent: true, confirmedAt: now },
+         isDemo: true,
+       };
+       this.store.add(request);
+diff --git a/frontend/src/app/services/request-store.service.ts b/frontend/src/app/services/request-store.service.ts
+index 0736456..2717a06 100644
+--- a/frontend/src/app/services/request-store.service.ts
++++ b/frontend/src/app/services/request-store.service.ts
+@@ -14,8 +14,12 @@ export class RequestStoreService {
+     return this.requests().find(r => r.id === id);
+   }
+ 
++  /**
++   * Adds a request, or replaces the one with the same id. Ids are unique, so re-creating a demo id
++   * (for example the seeded DEMO-HT-1042) never produces two entries.
++   */
+   add(request: StudentRequest): void {
+-    this.requests.update(list => [request, ...list]);
++    this.requests.update(list => [request, ...list.filter(r => r.id !== request.id)]);
+   }
+ 
+   nextId(prefix: string): string {
+diff --git a/frontend/src/app/shared/app-header.component.css b/frontend/src/app/shared/app-header.component.css
+new file mode 100644
+index 0000000..7f091ee
+--- /dev/null
++++ b/frontend/src/app/shared/app-header.component.css
+@@ -0,0 +1,51 @@
++:host { display: block; }
++
++/* ---------- Top bar ---------- */
++.topbar { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }
++.topbar-inner { max-width: 1200px; margin: 0 auto; height: 68px; padding: 0 24px; display: flex; align-items: center; gap: 16px; }
++.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
++.mark {
++  position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px;
++  background: var(--navy-900); color: #fff; font-weight: 800; font-size: 12px; letter-spacing: 0.02em; overflow: hidden;
++}
++.mark::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 6px; height: 3px; border-radius: 2px; background: var(--burgundy-600); }
++.brand-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
++.brand-text strong { font-size: 15px; letter-spacing: 0.01em; color: var(--navy-900); }
++.brand-text span { font-size: 12px; color: var(--muted); white-space: nowrap; }
++.divider { width: 1px; height: 26px; background: var(--line-strong); }
++.product { font-weight: 700; font-size: 15px; color: var(--burgundy-600); white-space: nowrap; }
++.nav { margin-left: 12px; display: flex; gap: 4px; }
++.nav a { padding: 8px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--muted); transition: background 0.15s, color 0.15s; }
++.nav a:hover { background: var(--navy-50); color: var(--navy-900); }
++.nav a.active { background: var(--navy-100); color: var(--navy-900); }
++.tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
++.icon-btn { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; color: var(--navy-900); transition: background 0.15s; }
++.icon-btn:hover { background: var(--navy-50); }
++.dot { position: absolute; top: 10px; right: 11px; width: 9px; height: 9px; border-radius: 50%; background: var(--burgundy-600); border: 2px solid #fff; }
++.avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--navy-100); color: var(--navy-900); font-weight: 700; border: 1px solid var(--navy-200); }
++.notif { position: relative; }
++.popover {
++  position: absolute; right: 0; top: calc(100% + 8px); width: min(340px, calc(100vw - 32px));
++  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-md); padding: 8px;
++}
++.pop-title { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; font-weight: 700; font-size: 14px; }
++.notif-item { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px; border-radius: 12px; transition: background 0.15s; }
++.notif-item:hover { background: var(--navy-50); }
++.notif-item.unread { background: var(--burgundy-50); }
++.notif-text { font-size: 14px; }
++.notif-time { font-size: 12px; color: var(--muted); }
++.empty-small { padding: 12px 10px; color: var(--muted); font-size: 14px; }
++
++/* Mobile: brand + tools on the first row, primary navigation on its own full-width row. */
++@media (max-width: 720px) {
++  .topbar-inner { height: auto; flex-wrap: wrap; padding: 8px 16px 0; gap: 0 8px; }
++  .brand { gap: 10px; }
++  .tools { gap: 2px; }
++  .icon-btn { width: 40px; height: 40px; }
++  .dot { top: 8px; right: 9px; }
++  .avatar { width: 36px; height: 36px; }
++  .divider { display: none; }
++  .brand-text span { display: none; }
++  .nav { order: 3; flex: 0 0 100%; margin: 8px -4px 0; padding: 4px 0 8px; gap: 6px; border-top: 1px solid var(--line); }
++  .nav a { flex: 1; text-align: center; padding: 10px 12px; min-height: 44px; display: grid; place-items: center; }
++}
+diff --git a/frontend/src/app/shared/app-header.component.html b/frontend/src/app/shared/app-header.component.html
+new file mode 100644
+index 0000000..b117e48
+--- /dev/null
++++ b/frontend/src/app/shared/app-header.component.html
+@@ -0,0 +1,43 @@
++<header class="topbar">
++  <div class="topbar-inner">
++    <a class="brand" routerLink="/home" aria-label="SRM Campus Assist — Home">
++      <span class="mark" aria-hidden="true">SRM</span>
++      <span class="brand-text">
++        <strong>SRMIST</strong>
++        <span>Kattankulathur Campus</span>
++      </span>
++    </a>
++    <span class="divider" aria-hidden="true"></span>
++    <span class="product">Campus Assist</span>
++
++    <nav class="nav" aria-label="Primary">
++      <a routerLink="/home" routerLinkActive="active" ariaCurrentWhenActive="page">Home</a>
++      <a routerLink="/requests" routerLinkActive="active" ariaCurrentWhenActive="page">My Requests</a>
++    </nav>
++
++    <div class="tools">
++      <div class="notif">
++        <button type="button" class="icon-btn" (click)="notifOpen.set(!notifOpen()); $event.stopPropagation()"
++          [attr.aria-expanded]="notifOpen()" aria-haspopup="dialog"
++          [attr.aria-label]="unreadCount() ? 'Notifications, ' + unreadCount() + ' unread' : 'Notifications'">
++          <ui-icon name="bell" [size]="20" />
++          @if (unreadCount()) { <span class="dot" aria-hidden="true"></span> }
++        </button>
++        @if (notifOpen()) {
++          <div class="popover" role="dialog" aria-label="Notifications">
++            <p class="pop-title">Notifications <span class="demo-pill">Demo</span></p>
++            @for (n of data.notifications(); track n.id) {
++              <button type="button" class="notif-item" [class.unread]="n.unread" (click)="openNotification(n.id, n.requestId)">
++                <span class="notif-text">{{ n.text }}</span>
++                <span class="notif-time">{{ ago(n.at) }}</span>
++              </button>
++            } @empty {
++              <p class="empty-small">You're all caught up.</p>
++            }
++          </div>
++        }
++      </div>
++      <span class="avatar" [attr.title]="data.student.fullName" role="img" [attr.aria-label]="'Profile: ' + data.student.fullName">{{ data.student.initials }}</span>
++    </div>
++  </div>
++</header>
+diff --git a/frontend/src/app/shared/app-header.component.ts b/frontend/src/app/shared/app-header.component.ts
+new file mode 100644
+index 0000000..7299d39
+--- /dev/null
++++ b/frontend/src/app/shared/app-header.component.ts
+@@ -0,0 +1,43 @@
++import { Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
++import { Router, RouterLink, RouterLinkActive } from '@angular/router';
++import { CampusDataService } from '../services/student.service';
++import { IconComponent } from './icon.component';
++import { timeAgo } from '../utils/text';
++
++/**
++ * Top bar shared by the Home and My Requests screens: branding, primary navigation,
++ * notifications and the student avatar. (The Assistant has its own focused header.)
++ */
++@Component({
++  selector: 'campus-header',
++  imports: [RouterLink, RouterLinkActive, IconComponent],
++  templateUrl: './app-header.component.html',
++  styleUrl: './app-header.component.css',
++})
++export class AppHeaderComponent {
++  private router = inject(Router);
++  private host = inject<ElementRef<HTMLElement>>(ElementRef);
++  protected data = inject(CampusDataService);
++
++  protected readonly notifOpen = signal(false);
++  protected readonly unreadCount = computed(() => this.data.notifications().filter(n => n.unread).length);
++  protected readonly ago = (iso: string) => timeAgo(iso);
++
++  protected openNotification(id: string, requestId?: string): void {
++    this.data.markNotificationRead(id);
++    this.notifOpen.set(false);
++    if (requestId) this.router.navigate(['/assistant'], { queryParams: { request: requestId } });
++  }
++
++  @HostListener('document:click', ['$event'])
++  protected onDocumentClick(event: Event): void {
++    if (this.notifOpen() && !this.host.nativeElement.querySelector('.notif')?.contains(event.target as Node)) {
++      this.notifOpen.set(false);
++    }
++  }
++
++  @HostListener('document:keydown.escape')
++  protected onEscape(): void {
++    this.notifOpen.set(false);
++  }
++}
+diff --git a/frontend/src/app/utils/requests.ts b/frontend/src/app/utils/requests.ts
+new file mode 100644
+index 0000000..2bfcd03
+--- /dev/null
++++ b/frontend/src/app/utils/requests.ts
+@@ -0,0 +1,34 @@
++import { RequestStatus, StudentRequest, TimelineStep } from '../models/campus.models';
++
++/** The four groups shown on My Requests. Submitted/In Review count as "in progress". */
++export type RequestBucket = 'in-progress' | 'completed' | 'awaiting';
++export type RequestFilter = 'all' | RequestBucket;
++
++export const REQUEST_FILTERS: { id: RequestFilter; label: string }[] = [
++  { id: 'all', label: 'All' },
++  { id: 'in-progress', label: 'In Progress' },
++  { id: 'completed', label: 'Completed' },
++  { id: 'awaiting', label: 'Awaiting Action' },
++];
++
++export function bucketOf(status: RequestStatus): RequestBucket {
++  if (status === 'Completed' || status === 'Resolved') return 'completed';
++  if (status === 'Awaiting Action') return 'awaiting';
++  return 'in-progress';
++}
++
++export function submittedAt(r: StudentRequest): string {
++  return r.submittedAt ?? r.history[0]?.at ?? r.updatedAt;
++}
++
++/** Uses the request's own timeline, or derives a simple one from its history. */
++export function timelineOf(r: StudentRequest): TimelineStep[] {
++  if (r.timeline?.length) return r.timeline;
++  const last = r.history.length - 1;
++  const closed = bucketOf(r.status) === 'completed';
++  return r.history.map((e, i) => ({
++    label: e.status === 'Submitted' ? 'Request submitted' : e.status,
++    state: i < last || closed ? 'done' : 'current',
++    at: e.at,
++  }));
++}
+diff --git a/frontend/src/app/utils/text.ts b/frontend/src/app/utils/text.ts
+index dd9a0b2..13d1196 100644
+--- a/frontend/src/app/utils/text.ts
++++ b/frontend/src/app/utils/text.ts
+@@ -30,8 +30,20 @@ export function sentenceCase(text: string): string {
+   return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+ }
+ 
+-export function statusTone(status: string): 'navy' | 'amber' | 'green' {
++export function statusTone(status: string): 'navy' | 'amber' | 'green' | 'red' {
++  if (status === 'Awaiting Action') return 'red';
+   if (status === 'Completed' || status === 'Resolved') return 'green';
+   if (status === 'In Review' || status === 'In Progress') return 'amber';
+   return 'navy';
+ }
++
++/** "Today · 10:42 AM", "Yesterday · 4:15 PM", "Sep 28 · 2:30 PM". */
++export function friendlyTime(value: string | Date, now = new Date()): string {
++  const d = new Date(value);
++  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
++  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
++  const days = Math.round((startOf(now) - startOf(d)) / 86_400_000);
++  if (days === 0) return `Today · ${time}`;
++  if (days === 1) return `Yesterday · ${time}`;
++  return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${time}`;
++}
+diff --git a/frontend/src/styles.css b/frontend/src/styles.css
+index 83e7a4c..1593557 100644
+--- a/frontend/src/styles.css
++++ b/frontend/src/styles.css
+@@ -76,6 +76,7 @@ button:disabled { cursor: not-allowed; }
+ .badge.navy { color: var(--navy-800); background: var(--navy-100); }
+ .badge.amber { color: var(--amber); background: var(--amber-50); }
+ .badge.green { color: var(--green); background: var(--green-50); }
++.badge.red { color: var(--burgundy-700); background: var(--burgundy-50); }
+ 
+ @media (prefers-reduced-motion: reduce) {
+   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+-- 
+2.43.0
+

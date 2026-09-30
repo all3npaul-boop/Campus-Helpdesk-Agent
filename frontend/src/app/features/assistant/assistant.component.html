@@ -1,0 +1,155 @@
+<div class="shell">
+  <header class="a-header">
+    <a class="back" routerLink="/home" aria-label="Back to Home"><ui-icon name="arrow-left" [size]="22" /></a>
+    <span class="mark" aria-hidden="true">SRM</span>
+    <div class="titles">
+      <h1>SRM Campus Assist</h1>
+      <p>Kattankulathur Campus</p>
+    </div>
+    <span class="online"><i aria-hidden="true"></i><span><span class="lg">AI Assistant </span>Online</span></span>
+  </header>
+
+  <div class="body">
+    <section class="convo" aria-label="Conversation with Campus Assist">
+      <div class="scroller" #scroller role="log" aria-live="polite" aria-relevant="additions">
+        <div class="thread">
+          @for (m of session.messages(); track m.id) {
+            @if (m.role === 'student') {
+              <div class="row student">
+                <div class="bubble">{{ m.text }}</div>
+                <time>{{ clock(m.at) }}</time>
+              </div>
+            } @else {
+              <article class="row agent" [class.error]="m.isError">
+                <span class="agent-avatar" aria-hidden="true"><ui-icon name="sparkles" [size]="18" /></span>
+                <div class="agent-body">
+                  <div class="meta"><strong>Campus Assist</strong><time>{{ clock(m.at) }}</time></div>
+                  <div class="text">{{ m.text }}</div>
+
+                  @if (m.steps?.length) { <agent-trace [steps]="m.steps!" /> }
+
+                  @if (m.info; as info) {
+                    <section class="info" [attr.aria-label]="info.title">
+                      <h3>{{ info.title }}</h3>
+                      @if (info.kind === 'steps') {
+                        <ol>@for (i of info.items; track i) { <li>{{ i }}</li> }</ol>
+                      } @else {
+                        <ul>@for (i of info.items; track i) { <li><ui-icon name="check-circle" [size]="16" /> {{ i }}</li> }</ul>
+                      }
+                      <p class="note">{{ info.note }}</p>
+                    </section>
+                  }
+
+                  @if (m.draft) {
+                    <action-draft-card [draft]="m.draft"
+                      (confirm)="session.confirm(m.id)"
+                      (save)="session.saveDraft(m.id, $event)"
+                      (viewRequest)="session.viewRequest($event)"
+                      (askElse)="askElse()" />
+                  }
+
+                  @if (m.request) { <request-status-card [request]="m.request" /> }
+
+                  @if (m.actions?.length) {
+                    <div class="chips" role="group" aria-label="Suggested actions">
+                      @for (a of m.actions!; track a.id) {
+                        <button type="button" class="chip action" [class.primary]="a.primary" (click)="session.perform(a)" [disabled]="session.typing()">
+                          @if (a.icon) { <ui-icon [name]="a.icon" [size]="16" /> }
+                          {{ a.label }}
+                        </button>
+                      }
+                    </div>
+                  }
+
+                  @if (m.options?.length) {
+                    <div class="chips" role="group" aria-label="Choose an option">
+                      @for (o of m.options!; track o) {
+                        <button type="button" class="chip option" (click)="session.send(o)" [disabled]="session.typing()">{{ o }}</button>
+                      }
+                    </div>
+                  }
+
+                  @if (m.followUps?.length) {
+                    <div class="follow" role="group" aria-label="Suggested follow-up questions">
+                      <span>Suggested follow-ups</span>
+                      <div class="chips">
+                        @for (f of m.followUps!; track f) {
+                          <button type="button" class="chip follow-chip" (click)="session.send(f)" [disabled]="session.typing()">{{ f }}</button>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  @if (m.isError && m.retryText) {
+                    <button type="button" class="retry" (click)="session.retry(m.retryText!)">
+                      <ui-icon name="refresh" [size]="16" /> Try again
+                    </button>
+                  }
+                </div>
+              </article>
+            }
+          }
+
+          @if (session.typing()) {
+            <div class="row agent typing" role="status" aria-label="Campus Assist is typing">
+              <span class="agent-avatar" aria-hidden="true"><ui-icon name="sparkles" [size]="18" /></span>
+              <div class="agent-body">
+                <div class="meta"><strong>Campus Assist</strong></div>
+                <div class="text dots"><span></span><span></span><span></span><em>Understanding your request…</em></div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <form class="composer" (submit)="$event.preventDefault(); send()">
+        <div class="composer-inner">
+          <input #composerInput type="text" name="message" autocomplete="off" enterkeyhint="send"
+            aria-label="Message Campus Assist" placeholder="Ask about a campus service, or describe a problem…"
+            [value]="draft()" (input)="draft.set($any($event.target).value)" />
+          <button type="submit" class="send" [disabled]="!draft().trim() || session.typing()" aria-label="Send message">
+            <ui-icon name="arrow-up" [size]="20" />
+          </button>
+        </div>
+        <p class="guard"><ui-icon name="shield-check" [size]="14" /> Campus Assist prepares actions — nothing is submitted without your confirmation. Demo data.</p>
+      </form>
+    </section>
+
+    <aside class="rail" aria-label="Session details">
+      <section class="rail-card">
+        <h2>Session</h2>
+        <dl>
+          <div><dt>Student</dt><dd>{{ data.student.fullName }}</dd></div>
+          <div><dt>Hostel</dt><dd>{{ data.student.hostelBlock }} · {{ data.student.room }}</dd></div>
+          <div><dt>Topic</dt><dd>{{ session.topic() ?? 'General' }}</dd></div>
+        </dl>
+      </section>
+      <section class="rail-card">
+        <h2>How this agent works</h2>
+        <ul class="rules">
+          <li><ui-icon name="check-circle" [size]="16" /> Understands your request</li>
+          <li><ui-icon name="check-circle" [size]="16" /> Retrieves campus information</li>
+          <li><ui-icon name="check-circle" [size]="16" /> Recommends and prepares an action</li>
+          <li><ui-icon name="shield-check" [size]="16" /> Submits only after you confirm</li>
+        </ul>
+      </section>
+      <section class="rail-card">
+        <div class="rail-head"><h2>Your requests</h2><a routerLink="/requests">View all</a></div>
+        @if (store.recent().length) {
+          <ul class="mini">
+            @for (r of store.recent().slice(0, 4); track r.id) {
+              <li>
+                <button type="button" (click)="session.viewRequest(r.id)" [disabled]="session.typing()">
+                  <span><strong>{{ r.title }}</strong><small>{{ r.id }} · {{ ago(r.updatedAt) }}</small></span>
+                  <span [class]="'badge ' + tone(r.status)">{{ r.status }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="empty">No requests yet.</p>
+        }
+      </section>
+    </aside>
+  </div>
+</div>

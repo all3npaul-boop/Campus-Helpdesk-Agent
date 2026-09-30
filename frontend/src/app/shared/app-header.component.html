@@ -1,0 +1,43 @@
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" routerLink="/home" aria-label="SRM Campus Assist — Home">
+      <span class="mark" aria-hidden="true">SRM</span>
+      <span class="brand-text">
+        <strong>SRMIST</strong>
+        <span>Kattankulathur Campus</span>
+      </span>
+    </a>
+    <span class="divider" aria-hidden="true"></span>
+    <span class="product">Campus Assist</span>
+
+    <nav class="nav" aria-label="Primary">
+      <a routerLink="/home" routerLinkActive="active" ariaCurrentWhenActive="page">Home</a>
+      <a routerLink="/requests" routerLinkActive="active" ariaCurrentWhenActive="page">My Requests</a>
+    </nav>
+
+    <div class="tools">
+      <div class="notif">
+        <button type="button" class="icon-btn" (click)="notifOpen.set(!notifOpen()); $event.stopPropagation()"
+          [attr.aria-expanded]="notifOpen()" aria-haspopup="dialog"
+          [attr.aria-label]="unreadCount() ? 'Notifications, ' + unreadCount() + ' unread' : 'Notifications'">
+          <ui-icon name="bell" [size]="20" />
+          @if (unreadCount()) { <span class="dot" aria-hidden="true"></span> }
+        </button>
+        @if (notifOpen()) {
+          <div class="popover" role="dialog" aria-label="Notifications">
+            <p class="pop-title">Notifications <span class="demo-pill">Demo</span></p>
+            @for (n of data.notifications(); track n.id) {
+              <button type="button" class="notif-item" [class.unread]="n.unread" (click)="openNotification(n.id, n.requestId)">
+                <span class="notif-text">{{ n.text }}</span>
+                <span class="notif-time">{{ ago(n.at) }}</span>
+              </button>
+            } @empty {
+              <p class="empty-small">You're all caught up.</p>
+            }
+          </div>
+        }
+      </div>
+      <span class="avatar" [attr.title]="data.student.fullName" role="img" [attr.aria-label]="'Profile: ' + data.student.fullName">{{ data.student.initials }}</span>
+    </div>
+  </div>
+</header>
