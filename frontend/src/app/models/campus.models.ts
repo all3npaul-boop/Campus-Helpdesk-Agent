@@ -4,7 +4,8 @@ export type IconName =
   | 'bell' | 'arrow-left' | 'arrow-right' | 'arrow-up' | 'search' | 'sparkles' | 'check' | 'check-circle'
   | 'clock' | 'map-pin' | 'wifi' | 'pencil' | 'shield-check' | 'chevron-right' | 'refresh' | 'alert-circle'
   | 'x' | 'inbox' | 'graduation-cap' | 'bed' | 'bus' | 'file-text' | 'wallet' | 'book-open' | 'cross' | 'wrench'
-  | 'list-checks' | 'play';
+  | 'list-checks' | 'play'
+  | 'layout-dashboard' | 'ticket' | 'building' | 'bar-chart' | 'sliders' | 'log-out' | 'alert-triangle' | 'users' | 'message-square' | 'menu';
 
 export interface StudentProfile {
   id: string;

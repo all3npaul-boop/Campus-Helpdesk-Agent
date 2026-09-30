@@ -1,0 +1,161 @@
+<div class="a-page">
+  <a class="a-crumb" routerLink="/admin/tickets"><ui-icon name="arrow-left" [size]="15" /> Back to tickets</a>
+
+  @if (ticket(); as t) {
+    <div class="a-head" style="margin-bottom: 16px">
+      <div class="a-title-row" style="width: 100%">
+        <div>
+          <div class="a-idline">
+            <span class="id">{{ t.id }}</span>
+            <adm-status [status]="t.status" />
+            <adm-priority [priority]="t.priority" />
+            @if (svc.isSlaAtRisk(t)) { <span class="a-kind" data-k="sla">SLA · {{ svc.slaLabel(t) }}</span> }
+          </div>
+          <h1>{{ t.title }}</h1>
+        </div>
+      </div>
+    </div>
+
+    @if (t.status === 'Needs Review') {
+      <div class="a-banner info" role="status"><ui-icon name="sparkles" [size]="18" /><span><strong>Review required.</strong> AI confidence is {{ t.aiConfidence }}% (below the {{ threshold }}% threshold){{ t.aiNote ? ' — ' + t.aiNote.toLowerCase() : '' }}. Confirm the department and assign the ticket.</span></div>
+    }
+    @if (t.status === 'Escalated') {
+      <div class="a-banner warn" role="status"><ui-icon name="alert-triangle" [size]="18" /><span><strong>Escalated.</strong> {{ t.escalationReason }}</span></div>
+    }
+    @if (t.missingInfo && t.status !== 'Resolved') {
+      <div class="a-banner info" role="status"><ui-icon name="message-square" [size]="18" /><span><strong>Waiting on the student.</strong> {{ t.missingInfo }}</span></div>
+    }
+    @if (t.status === 'Resolved' && t.resolution) {
+      <div class="a-banner ok" role="status"><ui-icon name="check-circle" [size]="18" /><span><strong>Resolved.</strong> {{ t.resolution }}</span></div>
+    }
+
+    <div class="a-detail">
+      <div class="a-stack">
+        <!-- Ticket information -->
+        <section class="a-card" aria-labelledby="info-h">
+          <div class="a-card-head"><h2 id="info-h">Ticket Information</h2></div>
+          <div class="a-card-body">
+            <dl class="a-facts">
+              <div><dt>Student</dt><dd>{{ t.student.name }}<small>{{ t.student.regNo }} · {{ t.student.program }}</small></dd></div>
+              <div><dt>Category</dt><dd>{{ t.category }}</dd></div>
+              <div><dt>Department</dt><dd>{{ t.department }}</dd></div>
+              <div><dt>Assigned to</dt><dd>{{ t.assignedTo ?? 'Unassigned' }}</dd></div>
+              <div><dt>Created</dt><dd>{{ when(t.createdAt) }}</dd></div>
+              <div><dt>Last updated</dt><dd>{{ when(t.updatedAt) }}</dd></div>
+            </dl>
+            <p class="a-sub" style="margin: 18px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase">Description</p>
+            <p class="a-desc">{{ t.description }}</p>
+          </div>
+        </section>
+
+        <!-- AI analysis -->
+        <section class="a-card" aria-labelledby="ai-h">
+          <div class="a-card-head"><h2 id="ai-h"><ui-icon name="sparkles" [size]="17" /> AI Analysis</h2><adm-confidence [value]="t.aiConfidence" /></div>
+          <div class="a-card-body">
+            <dl class="a-ai">
+              <div><dt>Detected intent</dt><dd>{{ t.aiClassification.intent }}</dd></div>
+              <div><dt>Category classification</dt><dd>{{ t.aiClassification.category }}</dd></div>
+              <div><dt>Suggested department</dt><dd>{{ t.aiClassification.suggestedDepartment }}</dd></div>
+              <div><dt>AI confidence</dt><dd>{{ t.aiConfidence }}%{{ t.aiConfidence < threshold ? ' · below review threshold' : '' }}</dd></div>
+              <div class="wide"><dt>Priority reasoning ({{ t.priority }})</dt><dd style="font-weight: 500">{{ t.aiReasoning }}</dd></div>
+              <div class="wide suggest"><dt>Suggested action</dt><dd>{{ t.aiClassification.suggestedAction }}</dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <!-- Activity timeline -->
+        <section class="a-card" aria-labelledby="tl-h">
+          <div class="a-card-head"><h2 id="tl-h">Activity Timeline</h2><span class="a-note">{{ t.activity.length }} events</span></div>
+          <div class="a-card-body">
+            <ol class="a-timeline">
+              @for (a of t.activity; track $index) {
+                <li [attr.data-a]="a.actor">
+                  <time [attr.datetime]="a.at">{{ clock(a.at) }}<small style="display: block; font-weight: 500; font-size: 11.5px; color: var(--faint)">{{ day(a.at) }}</small></time>
+                  <span class="t">{{ a.text }}<small>{{ a.actor }}</small></span>
+                </li>
+              }
+            </ol>
+          </div>
+        </section>
+      </div>
+
+      <!-- Admin actions -->
+      <aside class="a-detail-side" aria-label="Ticket actions">
+        <section class="a-card">
+          <div class="a-card-head"><h2>Admin Actions</h2></div>
+          <div class="a-actions">
+            <button type="button" class="a-btn secondary" [disabled]="t.status === 'Resolved'" (click)="toggle('assign')" [attr.aria-expanded]="panel() === 'assign'"><ui-icon name="users" [size]="17" /> Assign</button>
+            @if (panel() === 'assign') {
+              <div class="a-form">
+                <label for="assignee">Assign to</label>
+                <select id="assignee" class="a-select" (change)="assignee.set(value($event))">
+                  @for (g of assignees; track g.department) {
+                    <optgroup [label]="g.department">
+                      @for (team of g.teams; track team) { <option [value]="team" [selected]="assignee() === team">{{ team }}</option> }
+                    </optgroup>
+                  }
+                </select>
+                @if (t.status === 'Needs Review') { <p class="a-hint">Assigning confirms the AI classification and opens the ticket.</p> }
+                <div class="a-form-row"><button type="button" class="a-btn secondary" (click)="panel.set(null)">Cancel</button><button type="button" class="a-btn navy" (click)="assign()">Assign</button></div>
+              </div>
+            }
+
+            <button type="button" class="a-btn secondary" [disabled]="t.status === 'Resolved' || t.status === 'In Progress'" (click)="markInProgress()"><ui-icon name="play" [size]="16" /> Mark In Progress</button>
+
+            <button type="button" class="a-btn secondary" [disabled]="t.status === 'Resolved'" (click)="toggle('info')" [attr.aria-expanded]="panel() === 'info'"><ui-icon name="message-square" [size]="17" /> Request Information</button>
+            @if (panel() === 'info') {
+              <div class="a-form">
+                <label for="info-msg">Message to student</label>
+                <textarea id="info-msg" class="a-textarea" placeholder="e.g. Please attach the payment receipt." [value]="infoMessage()" (input)="infoMessage.set(value($event))"></textarea>
+                <div class="a-form-row"><button type="button" class="a-btn secondary" (click)="panel.set(null)">Cancel</button><button type="button" class="a-btn navy" [disabled]="!infoMessage().trim()" (click)="requestInfo()">Send request</button></div>
+              </div>
+            }
+
+            <button type="button" class="a-btn danger" [disabled]="t.status === 'Resolved' || t.status === 'Escalated'" (click)="toggle('escalate')" [attr.aria-expanded]="panel() === 'escalate'"><ui-icon name="alert-triangle" [size]="17" /> Escalate</button>
+            @if (panel() === 'escalate') {
+              <div class="a-form">
+                <label for="esc-reason">Reason (optional)</label>
+                <textarea id="esc-reason" class="a-textarea" placeholder="Why does this need a senior owner?" [value]="escalateReason()" (input)="escalateReason.set(value($event))"></textarea>
+                <div class="a-form-row"><button type="button" class="a-btn secondary" (click)="panel.set(null)">Cancel</button><button type="button" class="a-btn primary" (click)="escalate()">Escalate</button></div>
+              </div>
+            }
+
+            @if (t.status !== 'Resolved') {
+              <button type="button" class="a-btn success" (click)="toggle('resolve')" [attr.aria-expanded]="panel() === 'resolve'"><ui-icon name="check-circle" [size]="17" /> Resolve</button>
+              @if (panel() === 'resolve') {
+                <div class="a-form">
+                  <label for="res-msg">Resolution message</label>
+                  <textarea id="res-msg" class="a-textarea" placeholder="Tell the student what was done." [value]="resolution()" (input)="resolution.set(value($event))"></textarea>
+                  <p class="a-hint">Required. This will be shared with the student once tickets are synced.</p>
+                  <div class="a-form-row"><button type="button" class="a-btn secondary" (click)="panel.set(null)">Cancel</button><button type="button" class="a-btn success" [disabled]="!resolution().trim()" (click)="resolve()">Resolve ticket</button></div>
+                </div>
+              }
+            } @else {
+              <button type="button" class="a-btn secondary" (click)="reopen()"><ui-icon name="refresh" [size]="16" /> Reopen ticket</button>
+            }
+          </div>
+        </section>
+
+        <section class="a-card" aria-label="Service level">
+          <div class="a-card-head"><h2>Service Level</h2></div>
+          <dl class="a-summary">
+            <div><dt>SLA</dt><dd [class.risk]="svc.isSlaAtRisk(t)">{{ svc.slaLabel(t) }}</dd></div>
+            <div><dt>Raised</dt><dd>{{ t.repeatCount }}×</dd></div>
+            <div><dt>Status</dt><dd>{{ t.status }}</dd></div>
+          </dl>
+        </section>
+      </aside>
+    </div>
+
+    @if (flash(); as msg) {
+      <div class="a-flash" role="status" aria-live="polite"><ui-icon name="check-circle" [size]="18" /> {{ msg }}</div>
+    }
+  } @else {
+    <section class="a-card a-empty">
+      <span class="ico"><ui-icon name="inbox" [size]="24" /></span>
+      <h3>Ticket not found</h3>
+      <p>No ticket matches “{{ id() }}”. It may have been removed or the link may be incorrect.</p>
+      <a class="a-btn secondary" routerLink="/admin/tickets">Back to tickets</a>
+    </section>
+  }
+</div>

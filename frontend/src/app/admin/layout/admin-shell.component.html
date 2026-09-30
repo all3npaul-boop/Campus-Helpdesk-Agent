@@ -1,0 +1,49 @@
+<div class="adm">
+  <header class="a-top">
+    <button type="button" class="a-menu-btn" (click)="navOpen.set(!navOpen())" [attr.aria-expanded]="navOpen()" aria-controls="admin-nav" aria-label="Toggle navigation">
+      <ui-icon name="menu" [size]="22" />
+    </button>
+    <a class="a-brand" routerLink="/admin/dashboard" aria-label="SRM Campus Assist — Admin Console">
+      <span class="a-mark" aria-hidden="true">SRM</span>
+      <span class="a-brand-text"><strong>SRM Campus Assist</strong><span>SRMIST Kattankulathur</span></span>
+    </a>
+    <span class="a-console">Admin Console</span>
+
+    <div class="a-tools">
+      <span class="a-user">
+        <span class="a-avatar" role="img" [attr.aria-label]="'Profile: ' + admin.name">{{ admin.initials }}</span>
+        <span class="a-user-text"><strong>{{ admin.name }}</strong><span>{{ admin.role }}</span></span>
+      </span>
+      <button type="button" class="a-signout" (click)="signOut()" aria-label="Sign out">
+        <ui-icon name="log-out" [size]="17" /><span>Sign Out</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="a-body">
+    <aside class="a-side" id="admin-nav" [class.open]="navOpen()" aria-label="Admin navigation">
+      <p class="a-nav-label">Operations</p>
+      <nav class="a-nav">
+        @for (item of nav; track item.path) {
+          <a [routerLink]="item.path" routerLinkActive="active" ariaCurrentWhenActive="page" (click)="navOpen.set(false)">
+            <ui-icon [name]="item.icon" [size]="19" />
+            {{ item.label }}
+            @if (item.path === '/admin/tickets') {
+              <span class="a-count" [attr.aria-label]="unresolved() + ' unresolved'">{{ unresolved() }}</span>
+            } @else if (!item.live) {
+              <span class="a-soon">Soon</span>
+            }
+          </a>
+        }
+      </nav>
+
+      <div class="a-side-foot">
+        <a class="a-back" routerLink="/home"><ui-icon name="arrow-left" [size]="18" /> Student app</a>
+        <button type="button" class="a-signout" (click)="signOut()"><ui-icon name="log-out" [size]="18" /> Sign Out</button>
+      </div>
+    </aside>
+    @if (navOpen()) { <div class="a-scrim" (click)="navOpen.set(false)" aria-hidden="true"></div> }
+
+    <main class="a-main"><router-outlet /></main>
+  </div>
+</div>

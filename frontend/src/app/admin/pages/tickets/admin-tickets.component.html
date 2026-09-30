@@ -1,0 +1,75 @@
+<div class="a-page">
+  <div class="a-head">
+    <div>
+      <h1>Tickets</h1>
+      <p class="a-sub">
+        @if (svc.loaded()) { <span class="mono">{{ visible().length }}</span> of <span class="mono">{{ svc.tickets().length }}</span> tickets } @else { Loading tickets… }
+      </p>
+    </div>
+  </div>
+
+  <section class="a-card" aria-label="Ticket list">
+    <div class="a-toolbar" role="search">
+      <div class="a-search">
+        <ui-icon name="search" [size]="17" />
+        <input class="a-input" type="search" placeholder="Search by ID, student, reg. no. or issue" aria-label="Search tickets"
+          [value]="filters().search" (input)="set('search', $any($event.target).value)" />
+      </div>
+      <select class="a-select" aria-label="Filter by status" [value]="filters().status" (change)="set('status', $any($event.target).value)">
+        <option value="">All statuses</option>
+        @for (s of statuses; track s) { <option [value]="s" [selected]="filters().status === s">{{ s }}</option> }
+      </select>
+      <select class="a-select" aria-label="Filter by priority" (change)="set('priority', $any($event.target).value)">
+        <option value="">All priorities</option>
+        @for (p of priorities; track p) { <option [value]="p" [selected]="filters().priority === p">{{ p }}</option> }
+      </select>
+      <select class="a-select" aria-label="Filter by department" (change)="set('department', $any($event.target).value)">
+        <option value="">All departments</option>
+        @for (d of departments; track d) { <option [value]="d" [selected]="filters().department === d">{{ d }}</option> }
+      </select>
+      <select class="a-select" aria-label="Filter by category" (change)="set('category', $any($event.target).value)">
+        <option value="">All categories</option>
+        @for (c of categories; track c) { <option [value]="c" [selected]="filters().category === c">{{ c }}</option> }
+      </select>
+      @if (hasFilters()) { <button type="button" class="a-clear" (click)="clear()">Clear filters</button> }
+    </div>
+
+    <p class="a-sr" role="status" aria-live="polite">Showing {{ visible().length }} tickets.</p>
+
+    @if (!svc.loaded()) {
+      <div class="a-card-body" aria-busy="true">
+        @for (s of skeleton; track s) { <div class="a-skel" style="height: 40px; margin-bottom: 10px"></div> }
+      </div>
+    } @else if (visible().length) {
+      <div class="a-scroll">
+        <table class="a-table" style="min-width: 980px">
+          <thead>
+            <tr><th>ID</th><th>Student</th><th>Issue</th><th>Department</th><th>Priority</th><th>Status</th><th>AI Confidence</th><th>Created</th><th class="act"><span class="a-sr">Action</span></th></tr>
+          </thead>
+          <tbody>
+            @for (t of visible(); track t.id) {
+              <tr (click)="open(t.id)">
+                <td><a class="id" [routerLink]="['/admin/tickets', t.id]" (click)="$event.stopPropagation()">{{ t.id }}</a></td>
+                <td class="stu">{{ t.student.name }}<small>{{ t.student.regNo }}</small></td>
+                <td class="issue"><span>{{ t.title }}</span><small style="display: block; color: var(--faint); font-size: 11.5px">{{ t.category }}</small></td>
+                <td class="muted">{{ t.department }}</td>
+                <td><adm-priority [priority]="t.priority" /></td>
+                <td><adm-status [status]="t.status" /></td>
+                <td><adm-confidence [value]="t.aiConfidence" /></td>
+                <td class="muted nw" [attr.title]="full(t.createdAt)">{{ ago(t.createdAt) }}</td>
+                <td class="act"><a class="a-open-btn" [routerLink]="['/admin/tickets', t.id]" (click)="$event.stopPropagation()" [attr.aria-label]="'Open ' + t.id">Open <ui-icon name="chevron-right" [size]="14" /></a></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="a-empty">
+        <span class="ico"><ui-icon name="inbox" [size]="24" /></span>
+        <h3>No tickets match these filters</h3>
+        <p>Try a different search term or clear the filters to see every ticket.</p>
+        <button type="button" class="a-btn secondary" (click)="clear()">Clear filters</button>
+      </div>
+    }
+  </section>
+</div>

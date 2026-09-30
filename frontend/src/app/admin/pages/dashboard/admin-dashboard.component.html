@@ -1,0 +1,145 @@
+<div class="a-page">
+  <div class="a-head">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="a-sub">Live overview of student tickets across all campus departments.</p>
+    </div>
+    <a class="a-btn navy" routerLink="/admin/tickets"><ui-icon name="ticket" [size]="17" /> All tickets</a>
+  </div>
+
+  @if (!svc.loaded()) {
+    <div class="a-kpis" aria-busy="true" aria-label="Loading dashboard">
+      @for (s of skeleton; track s) { <div class="a-card a-skel" style="height: 88px"></div> }
+    </div>
+    <div class="a-grid-2"><div class="a-card a-skel" style="height: 300px"></div><div class="a-card a-skel" style="height: 300px"></div></div>
+    <div class="a-card a-skel" style="height: 320px"></div>
+  } @else {
+    <!-- KPIs (derived from TicketService) -->
+    <dl class="a-kpis" aria-label="Ticket summary">
+      @for (k of kpiCards(); track k.key) {
+        <div class="a-card a-kpi" [attr.data-k]="k.key">
+          <dt>{{ k.label }}</dt>
+          <dd>{{ k.value }}</dd>
+          <small>{{ k.sub }}</small>
+        </div>
+      }
+    </dl>
+
+    <div class="a-grid-2">
+      <!-- Ticket activity -->
+      <section class="a-card" aria-labelledby="act-h">
+        <div class="a-card-head">
+          <h2 id="act-h">Ticket Activity <span class="a-note">· last 7 days</span></h2>
+          <div class="a-legend"><span><i style="background: var(--navy-700)"></i>Created</span><span><i style="background: #2a9a68"></i>Resolved</span></div>
+        </div>
+        <div class="a-card-body">
+          <div class="a-chart" role="img" [attr.aria-label]="'Tickets created and resolved per day. Totals: ' + chartTotals().created + ' created, ' + chartTotals().resolved + ' resolved.'">
+            @for (d of svc.activity7d(); track d.date) {
+              <div class="a-day">
+                <div class="a-bars">
+                  <div class="a-bar c" [style.height.%]="(d.created / chartMax()) * 100" [attr.title]="d.created + ' created'"><span>{{ d.created }}</span></div>
+                  <div class="a-bar r" [style.height.%]="(d.resolved / chartMax()) * 100" [attr.title]="d.resolved + ' resolved'"><span>{{ d.resolved }}</span></div>
+                </div>
+                <div class="a-day-label">{{ d.label }}<small>{{ d.date }}</small></div>
+              </div>
+            }
+          </div>
+          <div class="a-chart-total">
+            <span><strong>{{ chartTotals().created }}</strong> created</span>
+            <span><strong>{{ chartTotals().resolved }}</strong> resolved</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Status overview -->
+      <section class="a-card" aria-labelledby="st-h">
+        <div class="a-card-head"><h2 id="st-h">Ticket Status Overview</h2></div>
+        <div class="a-card-body">
+          <div class="a-stack-bar" role="img" aria-label="Share of tickets by status">
+            @for (s of svc.statusDistribution(); track s.status) {
+              @if (s.count) { <i [class]="'s-' + statusClass(s.status)" [style.flex-grow]="s.count" [attr.title]="s.status + ': ' + s.count"></i> }
+            }
+          </div>
+          <ul class="a-dist">
+            @for (s of svc.statusDistribution(); track s.status) {
+              <li><span class="sw" [class]="'sw sw-' + statusClass(s.status)"></span><span>{{ s.status }}</span><b>{{ s.count }}</b><em>{{ s.percent }}%</em></li>
+            }
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <div class="a-grid-att">
+      <!-- AI attention -->
+      <section class="a-card a-att" aria-labelledby="att-h">
+        <div class="a-card-head">
+          <h2 id="att-h"><ui-icon name="sparkles" [size]="18" /> AI Attention Required</h2>
+          <span class="a-note">{{ svc.attention().length }} ticket{{ svc.attention().length === 1 ? '' : 's' }} need an administrator</span>
+        </div>
+        @if (topAttention().length) {
+          <ul class="a-att-list">
+            @for (a of topAttention(); track a.ticket.id) {
+              <li>
+                <a class="a-att-item" [routerLink]="['/admin/tickets', a.ticket.id]">
+                  <span>
+                    <span class="a-att-title"><span class="id">{{ a.ticket.id }}</span> — {{ a.ticket.title }} <span class="a-kind" [attr.data-k]="a.kind">{{ kindLabel(a.kind) }}</span></span>
+                    <span class="a-att-meta">
+                      <span>AI confidence: <b>{{ a.ticket.aiConfidence }}%</b></span>
+                      <span>Reason: <b>{{ a.reason }}</b></span>
+                      <span>Action: <b>{{ a.action }}</b></span>
+                    </span>
+                  </span>
+                  <span class="a-att-action">Open <ui-icon name="chevron-right" [size]="15" /></span>
+                </a>
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="a-empty"><span class="ico"><ui-icon name="check-circle" [size]="24" /></span><h3>Nothing needs attention</h3><p>Every active ticket is on track and confidently classified.</p></div>
+        }
+      </section>
+
+      <!-- Departments -->
+      <section class="a-card" aria-labelledby="dep-h">
+        <div class="a-card-head"><h2 id="dep-h">Department Breakdown</h2><span class="a-note">unresolved / total</span></div>
+        <div class="a-card-body a-depts">
+          @for (d of svc.departmentBreakdown(); track d.department) {
+            <div class="a-dept-row">
+              <span class="n">{{ d.department }}</span>
+              <span class="a-track" aria-hidden="true"><i [style.width.%]="(d.total / deptMax()) * 100"></i></span>
+              <span class="v"><b>{{ d.unresolved }}</b> / {{ d.total }}</span>
+            </div>
+          }
+        </div>
+      </section>
+    </div>
+
+    <!-- Recent tickets -->
+    <section class="a-card" aria-labelledby="rec-h">
+      <div class="a-card-head"><h2 id="rec-h">Recent Tickets</h2><a class="a-link" routerLink="/admin/tickets">View all <ui-icon name="chevron-right" [size]="14" /></a></div>
+      <div class="a-scroll">
+        <table class="a-table" style="min-width: 1080px">
+          <thead>
+            <tr><th>Ticket ID</th><th>Student</th><th>Issue</th><th>Category</th><th>Department</th><th>Priority</th><th>Status</th><th>AI Confidence</th><th>Created</th><th class="act">Action</th></tr>
+          </thead>
+          <tbody>
+            @for (t of recent(); track t.id) {
+              <tr (click)="open(t.id)">
+                <td><a class="id" [routerLink]="['/admin/tickets', t.id]" (click)="$event.stopPropagation()">{{ t.id }}</a></td>
+                <td class="stu">{{ t.student.name }}<small>{{ t.student.regNo }}</small></td>
+                <td class="issue"><span>{{ t.title }}</span></td>
+                <td class="muted">{{ t.category }}</td>
+                <td class="muted">{{ t.department }}</td>
+                <td><adm-priority [priority]="t.priority" /></td>
+                <td><adm-status [status]="t.status" /></td>
+                <td><adm-confidence [value]="t.aiConfidence" /></td>
+                <td class="muted nw" [attr.title]="full(t.createdAt)">{{ ago(t.createdAt) }}</td>
+                <td class="act"><a class="a-open-btn" [routerLink]="['/admin/tickets', t.id]" (click)="$event.stopPropagation()">Open <ui-icon name="chevron-right" [size]="14" /></a></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>
