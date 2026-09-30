@@ -2,6 +2,7 @@ import { Component, ViewEncapsulation, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { IconComponent } from '../../shared/icon.component';
 import { IconName } from '../../models/campus.models';
+import { AuthService } from '../../services/auth.service';
 import { TicketService } from '../services/ticket.service';
 
 interface NavItem { label: string; path: string; icon: IconName; live: boolean; }
@@ -19,6 +20,7 @@ interface NavItem { label: string; path: string; icon: IconName; live: boolean; 
 })
 export class AdminShellComponent {
   private router = inject(Router);
+  private auth = inject(AuthService);
   protected tickets = inject(TicketService);
 
   protected readonly navOpen = signal(false);
@@ -38,9 +40,10 @@ export class AdminShellComponent {
     return k.total - k.resolved;
   }
 
-  /** Placeholder until authentication exists: leaves the console for the Student app. */
+  /** Clears the session only (ticket data is untouched) and returns to the role selection screen. */
   protected signOut(): void {
     this.navOpen.set(false);
-    this.router.navigateByUrl('/home');
+    this.auth.logout();
+    this.router.navigateByUrl('/');
   }
 }

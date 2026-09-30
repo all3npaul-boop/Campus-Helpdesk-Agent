@@ -1,5 +1,6 @@
 import { Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthService } from '../services/auth.service';
 import { CampusDataService } from '../services/student.service';
 import { IconComponent } from './icon.component';
 import { timeAgo } from '../utils/text';
@@ -19,7 +20,9 @@ export class AppHeaderComponent {
   private host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected data = inject(CampusDataService);
 
+  private auth = inject(AuthService);
   protected readonly notifOpen = signal(false);
+  protected readonly profileOpen = signal(false);
   protected readonly unreadCount = computed(() => this.data.notifications().filter(n => n.unread).length);
   protected readonly ago = (iso: string) => timeAgo(iso);
 
@@ -29,8 +32,16 @@ export class AppHeaderComponent {
     if (requestId) this.router.navigate(['/assistant'], { queryParams: { request: requestId } });
   }
 
+  protected signOut(): void {
+    this.auth.logout();
+    this.router.navigateByUrl('/');
+  }
+
   @HostListener('document:click', ['$event'])
   protected onDocumentClick(event: Event): void {
+    if (this.profileOpen() && !this.host.nativeElement.querySelector('.profile')?.contains(event.target as Node)) {
+      this.profileOpen.set(false);
+    }
     if (this.notifOpen() && !this.host.nativeElement.querySelector('.notif')?.contains(event.target as Node)) {
       this.notifOpen.set(false);
     }
@@ -39,5 +50,6 @@ export class AppHeaderComponent {
   @HostListener('document:keydown.escape')
   protected onEscape(): void {
     this.notifOpen.set(false);
+    this.profileOpen.set(false);
   }
 }

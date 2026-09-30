@@ -17,7 +17,7 @@
 
     <div class="tools">
       <div class="notif">
-        <button type="button" class="icon-btn" (click)="notifOpen.set(!notifOpen()); $event.stopPropagation()"
+        <button type="button" class="icon-btn" (click)="notifOpen.set(!notifOpen()); profileOpen.set(false); $event.stopPropagation()"
           [attr.aria-expanded]="notifOpen()" aria-haspopup="dialog"
           [attr.aria-label]="unreadCount() ? 'Notifications, ' + unreadCount() + ' unread' : 'Notifications'">
           <ui-icon name="bell" [size]="20" />
@@ -37,7 +37,15 @@
           </div>
         }
       </div>
-      <span class="avatar" [attr.title]="data.student.fullName" role="img" [attr.aria-label]="'Profile: ' + data.student.fullName">{{ data.student.initials }}</span>
+      <div class="profile">
+        <button type="button" class="avatar" (click)="profileOpen.set(!profileOpen()); notifOpen.set(false); $event.stopPropagation()"
+          [attr.aria-expanded]="profileOpen()" aria-haspopup="menu" [attr.title]="data.student.fullName" [attr.aria-label]="'Profile menu: ' + data.student.fullName">{{ data.student.initials }}</button>
+        @if (profileOpen()) {
+          <div class="popover profile-pop" role="menu">
+            <button type="button" class="notif-item" role="menuitem" (click)="signOut()"><span class="notif-text">Sign Out</span></button>
+          </div>
+        }
+      </div>
     </div>
   </div>
 </header>

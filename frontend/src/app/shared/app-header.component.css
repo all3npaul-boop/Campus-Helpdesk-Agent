@@ -23,7 +23,9 @@
 .icon-btn:hover { background: var(--navy-50); }
 .dot { position: absolute; top: 10px; right: 11px; width: 9px; height: 9px; border-radius: 50%; background: var(--burgundy-600); border: 2px solid #fff; }
 .avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--navy-100); color: var(--navy-900); font-weight: 700; border: 1px solid var(--navy-200); }
-.notif { position: relative; }
+.notif, .profile { position: relative; }
+.profile-pop { width: 160px; }
+button.avatar { cursor: pointer; }
 .popover {
   position: absolute; right: 0; top: calc(100% + 8px); width: min(340px, calc(100vw - 32px));
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-md); padding: 8px;

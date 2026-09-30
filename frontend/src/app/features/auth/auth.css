@@ -1,0 +1,55 @@
+:host { display: block; min-height: 100vh; }
+.stage {
+  min-height: 100vh; display: grid; place-items: center; padding: 32px 16px;
+  background: radial-gradient(1100px 500px at 50% -10%, var(--navy-100), transparent 70%), var(--bg);
+}
+.panel { width: 100%; max-width: 520px; text-align: center; }
+.panel.narrow { max-width: 440px; }
+.brand { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.mark {
+  position: relative; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 13px;
+  background: var(--navy-900); color: #fff; font-weight: 800; font-size: 15px; overflow: hidden;
+}
+.mark::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: 8px; height: 4px; border-radius: 2px; background: var(--burgundy-600); }
+h1 { font-size: 30px; line-height: 1.15; color: var(--navy-900); letter-spacing: -0.01em; }
+.tag { margin-top: 6px; color: var(--muted); font-size: 16px; }
+.continue { margin: 34px 0 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.roles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.role {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 16px; min-height: 44px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+  text-align: center; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.role:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--navy-200); }
+.role .ico { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; background: var(--navy-50); color: var(--navy-900); }
+.role.admin .ico { background: var(--burgundy-50); color: var(--burgundy-600); }
+.role strong { font-size: 18px; color: var(--navy-900); }
+.role span.sub { font-size: 13px; color: var(--muted); }
+.foot { margin-top: 28px; font-size: 12px; color: var(--faint); }
+
+.card { margin-top: 4px; padding: 28px 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); text-align: left; }
+.card h2 { font-size: 22px; color: var(--navy-900); }
+.card .lead { margin: 4px 0 20px; color: var(--muted); font-size: 14px; }
+label.f { display: block; margin-bottom: 14px; }
+label.f > span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--navy-900); }
+.field { position: relative; }
+input[type=text], input[type=password], input[type=email] {
+  width: 100%; height: 46px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: #fff;
+}
+input:focus-visible { outline: 3px solid var(--navy-700); outline-offset: 1px; }
+.field input { padding-right: 48px; }
+.eye { position: absolute; right: 4px; top: 2px; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; color: var(--muted); }
+.eye:hover { background: var(--navy-50); color: var(--navy-900); }
+.row { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 18px; font-size: 14px; }
+.row label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.row input { width: 16px; height: 16px; accent-color: var(--navy-800); }
+.err { margin-bottom: 14px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--burgundy-50); color: var(--burgundy-700); font-size: 14px; }
+.primary { width: 100%; height: 48px; border-radius: 999px; background: var(--navy-900); color: #fff; font-weight: 700; text-align: center; transition: background 0.15s; }
+.primary:hover { background: var(--navy-800); }
+.primary.admin { background: var(--burgundy-600); }
+.primary.admin:hover { background: var(--burgundy-700); }
+.demo { margin-top: 16px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--navy-50); border: 1px solid var(--navy-100); font-size: 13px; color: var(--navy-800); }
+.demo code { font-family: ui-monospace, Menlo, monospace; }
+.back { display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; min-height: 44px; padding: 0 8px; font-weight: 600; color: var(--muted); border-radius: 10px; }
+.back:hover { color: var(--navy-900); background: var(--navy-50); }
+@media (max-width: 480px) { .roles { grid-template-columns: 1fr; } h1 { font-size: 26px; } .card { padding: 22px 18px; } }

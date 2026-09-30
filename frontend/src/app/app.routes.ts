@@ -2,22 +2,35 @@ import { Routes } from '@angular/router';
 import { AssistantComponent } from './features/assistant/assistant.component';
 import { HomeComponent } from './features/home/home.component';
 import { RequestsComponent } from './features/requests/requests.component';
+import { EntryComponent } from './features/auth/entry.component';
+import { LoginComponent } from './features/auth/login.component';
+import { guestGuard, roleGuard } from './guards/auth.guard';
 
 /**
- * Primary screens: Home, Assistant, and My Requests (a tracker only — details open in a panel). Every service, request and workflow happens inside /assistant.
+ * Entry & auth:
+ *   /                  Role selection (Student / Admin)          (/login is an alias)
+ *   /student/login     Student login  -> /home
+ *   /admin/login       Admin login    -> /admin/dashboard
+ * Student screens (STUDENT only):
  *   /home                         Student Home
  *   /assistant                    AI Campus Assistant
  *   /assistant?q=<text>           start from a typed or suggested question
  *   /assistant?context=<id>       start from a service or topic
  *   /assistant?request=<id>       start from an existing request
  *   /requests                     My Requests (track, filter, open details, hand back to the assistant)
- *   /admin/...                    Admin Console (lazy-loaded; see admin/admin.routes.ts)
+ * Admin Console (ADMIN only):
+ *   /admin/...                    lazy-loaded; see admin/admin.routes.ts
  */
+const student = { canActivate: [roleGuard('STUDENT')] };
+
 export const routes: Routes = [
-  { path: 'home', component: HomeComponent, title: 'Home · SRM Campus Assist' },
-  { path: 'assistant', component: AssistantComponent, title: 'Assistant · SRM Campus Assist' },
-  { path: 'requests', component: RequestsComponent, title: 'My Requests · SRM Campus Assist' },
-  { path: 'admin', loadChildren: () => import('./admin/admin.routes').then(m => m.ADMIN_ROUTES) },
-  { path: '', pathMatch: 'full', redirectTo: 'home' },
-  { path: '**', redirectTo: 'home' },
+  { path: '', pathMatch: 'full', component: EntryComponent, title: 'SRM Campus Assist' },
+  { path: 'login', pathMatch: 'full', redirectTo: '' },
+  { path: 'student/login', component: LoginComponent, data: { role: 'STUDENT' }, canActivate: [guestGuard('STUDENT')], title: 'Student Login · SRM Campus Assist' },
+  { path: 'admin/login', component: LoginComponent, data: { role: 'ADMIN' }, canActivate: [guestGuard('ADMIN')], title: 'Admin Login · SRM Campus Assist' },
+  { path: 'home', component: HomeComponent, ...student, title: 'Home · SRM Campus Assist' },
+  { path: 'assistant', component: AssistantComponent, ...student, title: 'Assistant · SRM Campus Assist' },
+  { path: 'requests', component: RequestsComponent, ...student, title: 'My Requests · SRM Campus Assist' },
+  { path: 'admin', canActivate: [roleGuard('ADMIN')], loadChildren: () => import('./admin/admin.routes').then(m => m.ADMIN_ROUTES) },
+  { path: '**', redirectTo: '' },
 ];

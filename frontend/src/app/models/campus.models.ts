@@ -5,7 +5,7 @@ export type IconName =
   | 'clock' | 'map-pin' | 'wifi' | 'pencil' | 'shield-check' | 'chevron-right' | 'refresh' | 'alert-circle'
   | 'x' | 'inbox' | 'graduation-cap' | 'bed' | 'bus' | 'file-text' | 'wallet' | 'book-open' | 'cross' | 'wrench'
   | 'list-checks' | 'play'
-  | 'layout-dashboard' | 'ticket' | 'building' | 'bar-chart' | 'sliders' | 'log-out' | 'alert-triangle' | 'users' | 'message-square' | 'menu';
+  | 'layout-dashboard' | 'ticket' | 'building' | 'bar-chart' | 'sliders' | 'log-out' | 'alert-triangle' | 'users' | 'message-square' | 'menu' | 'shield' | 'eye' | 'eye-off';
 
 export interface StudentProfile {
   id: string;
