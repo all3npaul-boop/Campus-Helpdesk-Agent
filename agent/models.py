@@ -8,6 +8,7 @@ from typing import Any
 
 class Outcome(str, Enum):
     RESOLVED_AUTOMATICALLY = "RESOLVED_AUTOMATICALLY"
+    DENIED_BY_POLICY = "DENIED_BY_POLICY"
     RECOMMENDATION_REQUIRES_HUMAN = "RECOMMENDATION_REQUIRES_HUMAN"
     ESCALATED = "ESCALATED"
     ERROR = "ERROR"
@@ -22,21 +23,6 @@ class Ticket:
 
 @dataclass
 class AgentResult:
-    ticket_id: str
-    category: str
-    outcome: Outcome
-    trace: list[str] = field(default_factory=list)
-    tools_called: list[str] = field(default_factory=list)
-    tool_results: list[dict[str, Any]] = field(default_factory=list)
-    policy_checked: bool = False
-    policy_decision: str = "NOT_CHECKED"
-    human_confirmation_required: bool = False
-    forbidden_action_detected: bool = False
-    escalation_reason: str | None = None
-    escalation_brief: str | None = None
-    was_closed_without_human: bool = False
-    was_closed_wrong: bool = False
-    unnecessary_tool_calls_avoided: int = 0
     # ticket
     ticket_id: str
     ticket_text: str = ""
@@ -68,10 +54,11 @@ class AgentResult:
     human_confirmation_required: bool = False
     action_executed: str | None = None  # only ever the mock ID-reset link
     recommendation: dict[str, Any] | None = None
+    denial: dict[str, Any] | None = None  # set only when the policy file itself says no
     escalation_code: str | None = None
     escalation_reason: str | None = None
     escalation_brief: str | None = None
-    was_closed_without_human: bool = False
+    was_closed_without_human: bool = False  # auto-resolved OR denied by an explicit policy rule
     unnecessary_tool_calls_avoided: int = 0
     trace: list[str] = field(default_factory=list)
 

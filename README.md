@@ -1,6 +1,6 @@
 # Campus Helpdesk Agent
 
-A Streamlit hackathon demo for **“Designing and building sustainable, intelligent AI agentic systems.”** It turns a limited set of synthetic campus tickets into an auditable, policy-governed workflow rather than a free-form chatbot.
+A Streamlit demo of a **campus helpdesk agent** for ID-card, hostel-bill and Wi-Fi tickets. It reads a ticket, calls mock tools (ID status, fee status, reset link), and either closes the ticket when the policy file allows it, closes it with the policy's own "no", or escalates to a human with a brief. It is an auditable, policy-governed workflow rather than a free-form chatbot.
 
 > **Safety statement:** The demo uses synthetic/mock data and does not connect to real financial, medical, identity, traffic, gate, or campus-control systems.
 
@@ -19,7 +19,7 @@ Ticket → deterministic classification → required information → local Pytho
 1. The agent identifies a ticket category and required evidence.
 2. It calls only the relevant deterministic synthetic tool(s).
 3. `PolicyEngine` reads `data/policy.json`; it is the authorization boundary, not an LLM prompt.
-4. Explicitly permitted active-ID resets may generate a mock reset link. Payment/refund matters produce a recommendation requiring human confirmation. Warden, Wi-Fi, unknown, missing, and ambiguous policy cases escalate.
+4. Explicitly permitted active-ID resets may generate a mock reset link. Payment/refund matters produce a recommendation requiring human confirmation, **unless the policy file contains an explicit `DENY` rule with a `statement`**, in which case the agent closes the ticket with that statement quoted verbatim (`DENIED_BY_POLICY`). Warden, Wi-Fi, unknown, missing, and ambiguous policy cases escalate.
 5. A structured result records observable trace events, tool calls/results, policy decision, escalation brief, and closure-safety fields.
 
 ## Deterministic demo tools
@@ -41,7 +41,7 @@ The policy explicitly forbids the agent from:
 - inventing payment/fee amounts, refund rules, deadlines, policy, or tool results;
 - modifying real financial accounts, processing payments, or issuing unapproved refunds;
 - accessing real bank, medical, or identity records;
-- identifying people, storing faces/plates, or operating cameras beyond any future counts-only design;
+- identifying people, storing faces/plates, or operating cameras;
 - controlling traffic signals, gates, gate holds, or medical changes;
 - bypassing required human approval, closing without evidence, or claiming a recommendation was executed;
 - treating an LLM-generated value as authoritative where a tool or policy source is required.
@@ -53,10 +53,12 @@ The complete machine-readable list is visible in the Streamlit UI and in [`data/
 - **Easy ID (`DEMO-001`):** `STU001` is checked, then a mock reset link is generated only after policy allows it.
 - **Missing fee (`DEMO-002`):** fee status comes from the mock fee tool. No payment, correction, or refund is executed; a human recommendation is prepared.
 - **Warden-only (`DEMO-003`):** no automated resolution is attempted; the agent makes a concise escalation brief.
+- **Refund request (`DEMO-004`):** with the shipped policy this is a human recommendation. To show the correct **no**, paste the official no-refund clause into `data/policy.json`:
+  `"refund": {"decision": "DENY", "statement": "<official policy text>"}`. The agent never writes a refund rule itself; a `DENY` rule with no statement escalates.
 
 ## Sustainability and resource efficiency
 
-The dashboard tracks runtime—not fabricated—metrics for tickets processed, automatic resolutions, escalations, human approval recommendations, human interventions avoided, forbidden actions blocked, incorrect closures, and unnecessary tool calls avoided per result. The intended benefit is avoiding repetitive, low-risk helpdesk work while keeping humans in control; this project makes **no unmeasured carbon-saving claim**.
+The dashboard tracks runtime—not fabricated—metrics for tickets processed, **closed-without-human** (auto-resolved or denied by an explicit policy rule), **closed-wrong** (closed without a human although the labelled `expected_outcome` in the ticket data differs), escalations, human approval recommendations, forbidden actions blocked, and unnecessary tool calls avoided. The intended benefit is avoiding repetitive, low-risk helpdesk work while keeping humans in control; this project makes **no unmeasured carbon-saving claim**.
 
 ## Setup and run
 
@@ -82,7 +84,7 @@ The test suite covers all tools, policy authorization, forbidden actions, all de
 - Classifying is intentionally small and deterministic; production use needs a reviewed taxonomy and authenticated, privacy-preserving integrations.
 - Policy rules are starter safety rules, not institutional policy. Replace the JSON only through an approved governance process.
 - There is no persistent ticket store or real human-approval workflow in this demo.
-- Future work can add authenticated staff approvals, policy versioning/signatures, durable audit storage, monitored error handling, accessibility testing, and optional aggregate **counts-only** occupancy inputs—never identity recognition.
+- Future work can add authenticated staff approvals, policy versioning/signatures, durable audit storage, monitored error handling, and accessibility testing.
 
 ## Angular frontend — SRM Campus Assist
 

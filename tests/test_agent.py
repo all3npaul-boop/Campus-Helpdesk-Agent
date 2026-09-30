@@ -42,10 +42,11 @@ def test_tool_failure_has_no_hallucinated_result():
     def broken_tool(_student_id):
         raise RuntimeError("synthetic tool unavailable")
     result = CampusHelpdeskAgent(tool_overrides={"check_id_status": broken_tool}).run(Ticket("4", "STU001", "ID reset please"))
-    assert result.outcome is Outcome.ERROR
+    assert result.outcome is Outcome.ESCALATED and result.escalation_code == "TOOL_FAILURE"
     assert result.tool_results == []
     assert "unavailable" in result.escalation_reason
-    assert result.policy_rule == "warden_only"
+    assert result.policy_decision == "NOT_EVALUATED_MISSING_EVIDENCE"
+    assert not result.was_closed_without_human
 
 
 def test_missing_student_id_escalates():

@@ -1,5 +1,6 @@
 [
-  {"ticket_id": "DEMO-001", "student_id": "STU001", "title": "Easy ID reset", "text": "My student ID is not working. Can you help me reset it?"},
-  {"ticket_id": "DEMO-002", "student_id": "STU001", "title": "Missing hostel fee", "text": "I paid my hostel fee but the system says it is still unpaid."},
-  {"ticket_id": "DEMO-003", "student_id": "STU002", "title": "Warden-only concern", "text": "I have a serious issue with my roommate and need help from the warden."}
+  {"ticket_id": "DEMO-001", "student_id": "STU001", "title": "Easy ID reset", "text": "My student ID is not working. Can you help me reset it?", "expected_outcome": "RESOLVED_AUTOMATICALLY"},
+  {"ticket_id": "DEMO-002", "student_id": "STU001", "title": "Missing hostel fee", "text": "I paid my hostel fee but the system says it is still unpaid.", "expected_outcome": "RECOMMENDATION_REQUIRES_HUMAN"},
+  {"ticket_id": "DEMO-003", "student_id": "STU002", "title": "Warden-only concern", "text": "I have a serious issue with my roommate and need help from the warden.", "expected_outcome": "ESCALATED"},
+  {"ticket_id": "DEMO-004", "student_id": "STU001", "title": "Refund request (policy answer)", "text": "Please refund my hostel fee.", "expected_outcome": "RECOMMENDATION_REQUIRES_HUMAN"}
 ]

@@ -1,11 +1,16 @@
-"""Data-driven authorization boundary for the Campus Helpdesk Agent."""
-
 """Data-driven authorization boundary for the Campus Helpdesk Agent.
 
 Every decision is derived from ``data/policy.json``. If the policy is missing,
 corrupt, ambiguous, contradictory, or silent about a category, the result is
-ESCALATE. The engine never fills a gap with a default "allow" or a default
+ESCALATE. The engine never fills a gap with a default "allow", "deny" or
 "human required" - a gap means a human reviews the ticket.
+
+A rule may be:
+- ``ALLOW_IF``       automatic action, only when every required fact matches
+- ``HUMAN_REQUIRED`` the agent may only prepare a recommendation
+- ``ESCALATE``       hand to a human with a brief
+- ``DENY``           the policy itself says no; the reply is the policy's own
+                     ``statement`` text, quoted verbatim (never generated)
 """
 
 import hashlib
@@ -13,18 +18,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-
-@dataclass(frozen=True)
-class PolicyDecision:
-    decision: str
-    reason: str
-    human_confirmation_required: bool = False
-
-
-class PolicyEngine:
-    """Loads policy data and returns conservative authorization decisions."""
-
-VALID_DECISIONS = {"ALLOW_IF", "HUMAN_REQUIRED", "ESCALATE"}
+VALID_DECISIONS = {"ALLOW_IF", "HUMAN_REQUIRED", "ESCALATE", "DENY"}
 
 
 class PolicyError(Exception):
@@ -33,7 +27,7 @@ class PolicyError(Exception):
 
 @dataclass(frozen=True)
 class PolicyDecision:
-    decision: str  # ALLOW | HUMAN_REQUIRED | ESCALATE
+    decision: str  # ALLOW | DENY | HUMAN_REQUIRED | ESCALATE
     reason: str
     human_confirmation_required: bool = False
     code: str = "OK"
@@ -47,37 +41,6 @@ class PolicyEngine:
         self.policy_path = Path(policy_path)
 
     def load(self) -> dict:
-        with self.policy_path.open(encoding="utf-8") as handle:
-            policy = json.load(handle)
-        if not isinstance(policy, dict) or not isinstance(policy.get("rules"), dict):
-            raise ValueError("Policy is missing required rules data")
-        if not isinstance(policy.get("forbidden_actions"), list):
-            raise ValueError("Policy is missing forbidden_actions")
-        return policy
-
-    def forbidden_actions(self) -> list[str]:
-        return self.load()["forbidden_actions"]
-
-    def decide(self, category: str, action: str, *, id_status: str | None = None) -> PolicyDecision:
-        try:
-            policy = self.load()
-        except (OSError, json.JSONDecodeError, ValueError):
-            return PolicyDecision("ESCALATE", "Policy is missing, invalid, or insufficient.")
-
-        rules = policy["rules"]
-        if category == "id_issue" and action == "generate_id_reset_link":
-            if rules.get("id_reset") != "allowed_when_id_status_is_active":
-                return PolicyDecision("ESCALATE", "ID reset policy is ambiguous or not explicitly authorized.")
-            if action not in policy.get("automatic_actions", []):
-                return PolicyDecision("ESCALATE", "Automatic ID reset link generation is not explicitly authorized.")
-            if id_status != "active":
-                return PolicyDecision("ESCALATE", "ID status is not active; human review is required.")
-            return PolicyDecision("ALLOW", "Active ID reset link generation is explicitly authorized.")
-        if category in {"hostel_fee", "payment", "refund"}:
-            return PolicyDecision("HUMAN_REQUIRED", "Payment or refund-related actions require human confirmation.", True)
-        if category == "warden_only":
-            return PolicyDecision("ESCALATE", "Warden-only issues require escalation.")
-        return PolicyDecision("ESCALATE", "No explicit policy authorization exists for this request.")
         try:
             raw = self.policy_path.read_bytes()
         except OSError as exc:
@@ -127,6 +90,12 @@ class PolicyEngine:
         if kind == "HUMAN_REQUIRED":
             return out("HUMAN_REQUIRED", f"Policy rule '{category}' requires human confirmation before any action.",
                        "HUMAN_REQUIRED", category, human=True)
+        if kind == "DENY":
+            statement = rule.get("statement")
+            if not isinstance(statement, str) or not statement.strip():
+                return out("ESCALATE", f"Policy rule '{category}' denies but gives no statement to quote; the agent will not invent one.",
+                           "POLICY_AMBIGUOUS", category)
+            return out("DENY", statement.strip(), "RULE_DENY", category)
 
         # ALLOW_IF: every element must be explicit, otherwise escalate.
         requires = rule.get("requires")

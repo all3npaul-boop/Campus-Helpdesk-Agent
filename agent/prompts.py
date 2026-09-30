@@ -2,5 +2,5 @@
 
 SAFETY_NOTICE = (
     "This workflow uses deterministic synthetic tools and a policy engine. "
-    "It does not connect to real campus, financial, identity, medical, traffic, or gate systems."
+    "It does not connect to real campus, financial, or identity systems."
 )
